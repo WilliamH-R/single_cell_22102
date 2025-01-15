@@ -1,0 +1,187 @@
+# Imports
+```{r}
+library(Seurat)
+```
+
+# Load RAW data
+```{r}
+raw_data <- readRDS("/home/projects/22102_single_cell_2025/projects/group_1/d72106bd-d03b-45e6-a0fa-ca2a831ef092.rds")
+```
+
+# Rename ENSG to gene symbol
+
+Function to do renaming:
+```{r}
+RenameGenesSeurat <- function(obj,
+                              newnames) {
+  print("Run this before integration. It only changes obj@assays$RNA@counts, @data and @scale.data.")
+  RNA <- obj@assays$RNA
+
+  if (nrow(RNA) == length(newnames)) {
+    if (length(RNA@counts)) RNA@counts@Dimnames[[1]]            <- newnames
+    if (length(RNA@data)) RNA@data@Dimnames[[1]]                <- newnames
+    if (length(RNA@scale.data)) RNA@scale.data@Dimnames[[1]]    <- newnames
+  } else {"Unequal gene sets: nrow(RNA) != nrow(newnames)"}
+  obj@assays$RNA <- RNA
+  return(obj)
+}
+```
+
+Apply renaming:
+```{r}
+raw_data <- raw_data |>
+  RenameGenesSeurat(newnames = unfactor(raw_data@assays[["RNA"]]@meta.features[["feature_name"]]))
+```
+
+# Remove leftover ENSG genes
+```{r}
+# Extract used genes
+genes_used <- stringr::str_extract(unfactor(raw_data@assays[["RNA"]]@meta.features[["feature_name"]]),
+                                   pattern = "^(?!ENSG).+") |>
+  na.omit()
+
+# Pull the raw expression matrix from the original Seurat object containing only the genes of interest
+subset_matrix <- raw_data@assays[["RNA"]]$counts[genes_used, ]
+
+# Create a new Seurat object with just the genes of interest
+seurat_new <- CreateSeuratObject(subset_matrix)
+
+# Pull the identities from the original Seurat object as a data.frame
+orig_meta <- raw_data@meta.data
+
+# Add the idents to the meta.data slot
+seurat_new <- AddMetaData(object = seurat_new,
+                          metadata = orig_meta)
+
+# Overwrite the raw_data object and clear up memory
+raw_data <- seurat_new
+rm(seurat_new)
+```
+
+# Calculate percent mitochondrial genes
+```{r}
+raw_data[["mito_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
+                                                             pattern = "^MT")
+# Or by a list of mitochondrial genes
+# mito_list <- c("XXX", "XXX")
+# raw_data[["ribo_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
+#                                                        features = mito_list)
+```
+
+# Calculate percent ribosomal genes
+```{r}
+raw_data[["ribo_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
+                                                       pattern = "XXX")
+
+# Or by a list of ribosomal genes
+# ribo_list <- c("XXX", "XXX")
+# raw_data[["ribo_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
+#                                                        features = ribo_list)
+```
+
+# Calculate percent hemoglobin genes
+```{r}
+raw_data[["hemo_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
+                                                       pattern = "XXX")
+# Or by a list of hemo genes
+# hemo_list <- c("XXX", "XXX")
+# raw_data[["ribo_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
+#                                                        features = hemo_list)
+```
+
+# Violinplot of calculated features
+```{r}
+VlnPlot(raw_data, features = c("percent.mt",
+                               "percent.mt.2",
+                               "ribo_DTU",
+                               "hemo_DTU"),
+        alpha = 0.02)
+```
+
+# Apply filtering
+```{r}
+raw_data <- raw_data |>
+  Seurat::subset(subset = nFeature_RNA > XXX & # Is 250 in paper
+                   nFeature_RNA < XXX &
+                   nCount_RNA > XXX &
+                   nCount_RNA < XXX &
+                   mito_DTU < XXX &
+                   ribo_DTU < XXX &
+                   hemo_DTU < XXX
+                   )
+```
+
+# Normalize
+```{r}
+raw_data <- NormalizeData(raw_data)
+```
+
+# Find variable features
+```{r}
+raw_data <- FindVariableFeatures(raw_data, nfeatures = 2000)
+```
+
+# Scale data
+```{r}
+raw_data <- ScaleData(raw_data)
+```
+
+# Run PCA
+```{r}
+raw_data <- RunPCA(raw_data)
+```
+
+## Find dimensionality
+```{r}
+ElbowPlot(raw_data)
+```
+
+Decide on a number of dimensions to use
+```{r}
+n_dimensions <- XXX
+```
+
+# Find clusters
+```{r}
+raw_data <- FindNeighbors(raw_data)
+raw_data <- FindClusters(raw_data,
+                         resolution = c(0.1, 0.3, 0.5, 0.7, 0.9, 1.1, 1.3, 1.5))
+```
+
+## Find optimal resolution
+```{r}
+library(clustree)
+clustree(pbmc.MTB.cca, prefix = "RNA_snn_res.")
+```
+
+Decide on a resolution
+```{r}
+Idents(pbmc.MTB.cca) <- XXX # e.g. "RNA_snn_res.0.3"
+```
+
+# Run UMAP
+```{r}
+raw_data <- RunUMAP(raw_data,
+                    dims = 1:n_dimensions)
+```
+
+## Visualize different groupings
+
+See if we observe some clear batch effects or other interesting stuff.
+```{r}
+views <- c("CHIP", "ProjectID", "MUTATION.GROUP", "scType_celltype", "Clone",
+           "cell_type", "disease", "sex", "self_reported_ethnicity",
+           "development_stage")
+
+for (view in views) {
+  DimPlot(pbmc.MTB_subset,
+          reduction = "umap",
+          group.by = view)
+} 
+```
+
+# Save object
+```{r}
+saveRDS(raw_data, "data/filtered_data.rds")
+```
+

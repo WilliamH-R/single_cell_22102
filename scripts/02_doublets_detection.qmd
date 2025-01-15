@@ -1,0 +1,35 @@
+# Imports
+```{r}
+library(Seurat)
+library(scDblFinder)
+```
+
+# Load data
+```{r}
+filtered_data <- readRDS("data/filtered_data.rds")
+```
+
+# Find doublets
+```{r}
+#### COPIED FROM EXERCISE ANSWERS ####
+library(scDblFinder)
+#Convert your seurat object to a sce object
+#Create a sample variable for the doublet predictor to use as input
+filtered_data$sample <- paste0(filtered_data$subject, "_", filtered_data$timepoint)
+sce <- as.SingleCellExperiment(filtered_data)
+#Store the highly variable features as top.var (required to use with scDblFinder)
+top.var <- VariableFeatures(filtered_data)
+
+set.seed(10010101)
+sce.dbl <- scDblFinder(sce,samples="sample", clusters=colLabels(sce))
+
+plotUMAP(sce.dbl, colour_by="scDblFinder.score")
+
+
+table(sce.dbl$scDblFinder.class)
+
+plotColData(sce.dbl, x="RNA_snn_res.0.3", y="scDblFinder.score", colour_by=("scDblFinder.class"))
+
+######################################
+```
+
