@@ -1,5 +1,18 @@
 
 ```{r}
+#Load libraries
+library(Seurat)
+library(data.table)
+library(ggplot2)
+library(dplyr)
+library(BiocSingular)
+library(scDblFinder)
+library(SingleCellExperiment)
+library(scater)
+library(hdf5r)
+```
+
+```{r}
 test_data <- readRDS("/home/projects/22102_single_cell_2025/projects/group_1/d72106bd-d03b-45e6-a0fa-ca2a831ef092.rds")
 ```
 
@@ -23,19 +36,13 @@ test_data_2 <- test_data
 test_data_2 <- RenameGenesSeurat(obj = test_data_2,
                                  newnames = unfactor(test_data_2@assays[["RNA"]]@meta.features[["feature_name"]]))
 ```
-
 ```{r}
-library(Seurat)
+genes.use <- stringr::str_extract(unfactor(test_data_2@assays[["RNA"]]@meta.features[["feature_name"]]), pattern = "^(?!ENSG).+") |> na.omit()
 
-test_data_2[["is_ensg"]] <- grepl("^ENSG", rownames(test_data_2))
-test_data_2 <- subset(test_data_2, subset = is_ensg == FALSE)
-
-
-test_data_2[["percent.mt.2"]] <- Seurat::PercentageFeatureSet(test_data_2, pattern = "^MT")
-
-head(test_data_2@meta.data$percent.mt)
-head(test_data_2@meta.data$percent.mt.2)
-
-VlnPlot(test_data_2, features = c("percent.mt", "percent.mt.2"), alpha = 0.02)
+subset.matrix <- test_data_2@assays[["RNA"]]$counts[genes.use, ] # Pull the raw expression matrix from the original Seurat object containing only the genes of interest
+object2 <- CreateSeuratObject(subset.matrix) # Create a new Seurat object with just the genes of interest
+orig.ident <- test_data_2@meta.data # Pull the identities from the original Seurat object as a data.frame
+object2 <- AddMetaData(object = object2, metadata = orig.ident) # Add the idents to the meta.data slot
+# object2 <- SetAllIdent(object = object2, id = ident.use) # Assign identities for the new Seurat object
 ```
 
