@@ -1,0 +1,4 @@
+Questions for Kristoffer:
+Q1) We have ENSEMBL IDs instead of gene symbols. We can translate between the two, but some ENSEMBL IDs do not have a translation. How should we handle those? Should we drop those "genes"?
+
+Q2) We have sick vs disease, but disease can be subtyped into wildtype disease and mutant disease for each cell. We could do two analyses: one where we disregard the subset of diseases and only considers sick vs disease, and another where we only consider wildtype vs mutant. Can we subset like proposed, or is there something specific we need to consider? Many are noted NA, can we simply remove those?
