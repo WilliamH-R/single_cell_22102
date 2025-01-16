@@ -1,7 +1,9 @@
 Questions for Kristoffer:
 Q1) We have ENSEMBL IDs instead of gene symbols. We can translate between the two, but some ENSEMBL IDs do not have a translation. How should we handle those? Should we drop those "genes"?
+A1) Find oldest version of ENSML that contains the ENSG that doesn't match, use that for matching. If it does not work, just drop the genes but investigate how many counts and genes we drop. Normalize and scale AFTER removal
 
 Q2) We have sick vs disease, but disease can be subtyped into wildtype disease and mutant disease for each cell. We could do two analyses: one where we disregard the subset of diseases and only considers sick vs disease, and another where we only consider wildtype vs mutant. Can we subset like proposed, or is there something specific we need to consider? Many are noted NA, can we simply remove those?
+A2) We can indeed drop NA, just discuss how it can impact analyses (it is just a lot of cells we drop)
 
 Q5) Does mitochondrial genes start with "MRP"?
 
