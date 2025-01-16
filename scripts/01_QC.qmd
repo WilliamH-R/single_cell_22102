@@ -2,6 +2,7 @@
 ```{r}
 library(Seurat)
 library(dplyr)
+library(ggplot2)
 ```
 
 # Load RAW data
@@ -57,6 +58,15 @@ seurat_new <- AddMetaData(object = seurat_new,
 # Overwrite the raw_data object
 raw_data <- seurat_new
 ```
+
+# Visualize RNA counts before and after ENSG leftover genes removal
+```{r}
+raw_data@meta.data |>
+  ggplot(aes(x = "",
+             y = nCount_RNA)) +
+  geom_violin()
+```
+
 
 # Calculate percent mitochondrial genes
 ```{r}
