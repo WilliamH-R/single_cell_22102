@@ -7,8 +7,37 @@ library(ggplot2)
 
 # Load RAW data
 ```{r}
-raw_data <- readRDS("/home/projects/22102_single_cell_2025/projects/group_1/d72106bd-d03b-45e6-a0fa-ca2a831ef092.rds")
+raw_data <- readRDS("../data/raw_data.rds")
 ```
+
+# Tibble to keep track of how many cells are removed at each step
+```{r}
+dimensions <- tibble::tibble(step = character(),
+                             n_cells = numeric(),
+                             n_genes = numeric())
+
+# Update dimensions overview
+dimensions <- dimensions |>
+  add_row(step = "Initial",
+          n_genes = nrow(raw_data),
+          n_cells = ncol(raw_data))
+```
+
+
+# Subset to specific subject IDs
+```{r}
+raw_data <- raw_data |>
+  subset(subset = donor_id %in% c("CH-21-002", "CH-21-013", "CH-21-020", "CH-21-031",
+                                  "CH-21-006", "CH-21-046", "CH-21-014", "CH-21-033",
+                                  "CH-20-004", "CH-21-037", "CH-21-034", "CH-21-029"))
+
+# Update dimensions overview
+dimensions <- dimensions |>
+  add_row(step = "Subset to specific subject IDs",
+          n_genes = nrow(raw_data),
+          n_cells = ncol(raw_data))
+```
+
 
 # Rename ENSG to gene symbol
 
@@ -50,59 +79,198 @@ seurat_new <- CreateSeuratObject(subset_matrix)
 
 # Pull the identities from the original Seurat object as a data.frame
 orig_meta <- raw_data@meta.data
+orig_meta$nCount_RNA <- NULL
+orig_meta$nFeature_RNA <- NULL
 
 # Add the idents to the meta.data slot
 seurat_new <- AddMetaData(object = seurat_new,
                           metadata = orig_meta)
-
-# Overwrite the raw_data object
-raw_data <- seurat_new
 ```
 
-# Visualize RNA counts before and after ENSG leftover genes removal
+## Visualize RNA counts before and after ENSG leftover genes removal
+Helper function
+```{r}
+format_large <- function(x) {
+  if (x >= 1e6) {
+    paste0(round(x / 1e6, 2), "M") # Millions
+  } else if (x >= 1e3) {
+    paste0(round(x / 1e3, 2), "K") # Thousands
+  } else {
+    as.character(x) # No formatting needed
+  }
+}
+```
+
+Visualize nCount_RNA (the number of reads that are mapped per cell).
 ```{r}
 raw_data@meta.data |>
   ggplot(aes(x = "",
              y = nCount_RNA)) +
-  geom_violin()
+  geom_violin(fill = "#619CFF", color = "#619CFF") +
+  geom_text(aes(x = "",
+                y = max(nCount_RNA) + 5,
+                label = stringr::str_c("Genes =",
+                                       nrow(raw_data),
+                                       ",",
+                                       "Total count =",
+                                       sum(raw_data@meta.data$nCount_RNA) |>
+                                         format_large(),
+                                       sep = " ")), 
+            vjust = 0) +
+  labs(x = NULL,
+       y = "RNA read counts",
+       title = "Before ENSG removal")
+
+seurat_new@meta.data |>
+  ggplot(aes(x = "",
+             y = nCount_RNA)) +
+  geom_text(aes(x = "",
+                y = max(nCount_RNA) + 5,
+                label = stringr::str_c("Genes =",
+                                       nrow(seurat_new),
+                                       ",",
+                                       "Total count =",
+                                       sum(seurat_new@meta.data$nCount_RNA) |>
+                                         format_large(),
+                                       sep = " ")), 
+            vjust = 0) +
+  geom_violin(fill = "#619CFF", color = "#619CFF") +
+  labs(x = NULL,
+       y = "RNA read counts",
+       title = "After ENSG removal")
 ```
 
-
-# Calculate percent mitochondrial genes
+Visualize nFeature_RNA (the number of genes that are detected per cell).
 ```{r}
-raw_data[["mito_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
-                                                             pattern = "^MT")
+raw_data@meta.data |>
+  ggplot(aes(x = "",
+             y = nFeature_RNA)) +
+  geom_violin(fill = "#F8766D", color = "#F8766D") +
+  geom_text(aes(x = "",
+                y = max(nFeature_RNA) + 5,
+                label = stringr::str_c("Genes =",
+                                       nrow(raw_data),
+                                       ",",
+                                       "Total count =",
+                                       sum(raw_data@meta.data$nFeature_RNA) |>
+                                         format_large(),
+                                       sep = " ")), 
+            vjust = 0) +
+  labs(x = NULL,
+       y = "Gene counts",
+       title = "Before ENSG removal")
+
+seurat_new@meta.data |>
+  ggplot(aes(x = "",
+             y = nFeature_RNA)) +
+  geom_violin(fill = "#F8766D", color = "#F8766D") +
+  geom_text(aes(x = "",
+                y = max(nFeature_RNA) + 5,
+                label = stringr::str_c("Genes =",
+                                       nrow(seurat_new),
+                                       ",",
+                                       "Total count =",
+                                       sum(seurat_new@meta.data$nFeature_RNA) |>
+                                         format_large(),
+                                       sep = " ")), 
+            vjust = 0) +
+  labs(x = NULL,
+       y = "Gene counts",
+       title = "After ENSG removal")
+```
+
+## Overwrite object and clear memory
+```{r}
+# Overwrite the raw_data object
+raw_data <- seurat_new
+rm(seurat_new)
+rm(orig_meta)
+rm(subset_matrix)
+
+# Update dimensions overview
+dimensions <- dimensions |>
+  add_row(step = "Remove leftover ENSG genes",
+          n_genes = nrow(raw_data),
+          n_cells = ncol(raw_data))
+```
+
+# Do we have mitochondrial genes?
+```{r}
+mito_genes <- readr::read_tsv(file = "https://www.genenames.org/cgi-bin/genegroup/download?id=1974&type=node",
+                              show_col_types = FALSE) |>
+  pull(`Approved symbol`)
+
+for (gene in mito_genes) {
+  if (gene %in% rownames(raw_data)) {
+    print("Found a mito gene:", gene)
+  }
+}
+```
+
+## Calculate percent mitochondrial genes if found
+```{r}
+# raw_data[["mito_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
+#                                                        pattern = "^MT")
+
 # Or by a list of mitochondrial genes
-# mito_list <- c("XXX", "XXX")
 # raw_data[["ribo_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
-#                                                        features = mito_list)
+#                                                        features = mito_genes)
 ```
 
-# Calculate percent ribosomal genes
+# Do we have ribosomal genes?
 ```{r}
-raw_data[["ribo_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
-                                                       pattern = "XXX")
+ribo_genes <- readr::read_tsv(file = "https://www.genenames.org/cgi-bin/genegroup/download?id=1054&type=branch",
+                              show_col_types = FALSE) |>
+  filter(stringr::str_detect(string = `Approved name`,
+                             pattern = "^ribosomal")) |>
+  pull(`Approved symbol`)
+
+for (gene in ribo_genes) {
+  if (gene %in% rownames(raw_data)) {
+    print(glue::glue("Found a ribo gene: {gene}"))
+  }
+}
+```
+
+## Calculate percent ribosomal genes if found
+```{r}
+# raw_data[["ribo_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
+#                                                        pattern = "XXX")
 
 # Or by a list of ribosomal genes
-# ribo_list <- c("XXX", "XXX")
 # raw_data[["ribo_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
-#                                                        features = ribo_list)
+#                                                        features = ribo_genes)
+```
+
+# Do we have hemoglobin genes?
+```{r}
+hemo_genes <- stringr::str_extract(string = rownames(raw_data),
+                    pattern = "^HB.+") |>
+  na.omit() |>
+  unique()
+hemo_genes <- hemo_genes[!hemo_genes %in% c("HBEGF", "HBS1L", "HBP1")] # Remove non-hemo manually
+
+for (gene in hemo_genes) {
+  if (gene %in% rownames(raw_data)) {
+    print(glue::glue("Found a hemo gene: {gene}"))
+  }
+}
 ```
 
 # Calculate percent hemoglobin genes
 ```{r}
-raw_data[["hemo_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
-                                                       pattern = "XXX")
+# raw_data[["hemo_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
+#                                                        pattern = "^HB(?!EGF$|S1L$|P1$).*")
+
 # Or by a list of hemo genes
-# hemo_list <- c("XXX", "XXX")
-# raw_data[["ribo_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
-#                                                        features = hemo_list)
+raw_data[["ribo_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
+                                                       features = hemo_genes)
 ```
 
 # Violinplot of calculated features
 ```{r}
 VlnPlot(raw_data, features = c("percent.mt",
-                               "percent.mt.2",
+                               "mito_DTU",
                                "ribo_DTU",
                                "hemo_DTU"),
         alpha = 0.02)
@@ -111,14 +279,20 @@ VlnPlot(raw_data, features = c("percent.mt",
 # Apply filtering
 ```{r}
 raw_data <- raw_data |>
-  Seurat::subset(subset = nFeature_RNA > XXX & # Is 250 in paper
-                   nFeature_RNA < XXX &
-                   nCount_RNA > XXX &
-                   nCount_RNA < XXX &
-                   mito_DTU < XXX &
-                   ribo_DTU < XXX &
-                   hemo_DTU < XXX
-                   )
+  subset(subset = nFeature_RNA > XXX & # Is 250 in paper
+           nFeature_RNA < XXX &
+           nCount_RNA > XXX &
+           nCount_RNA < XXX &
+           mito_DTU < XXX &
+           ribo_DTU < XXX &
+           hemo_DTU < XXX
+         )
+
+# Update dimensions overview
+dimensions <- dimensions |>
+  add_row(step = "Apply filtering",
+          n_genes = nrow(raw_data),
+          n_cells = ncol(raw_data))
 ```
 
 # Normalize
@@ -193,5 +367,6 @@ for (view in views) {
 # Save object
 ```{r}
 saveRDS(raw_data, "data/filtered_data.rds")
+saveRDS(dimensions, "data/dimensions.rds")
 ```
 
