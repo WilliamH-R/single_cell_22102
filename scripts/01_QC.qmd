@@ -30,13 +30,13 @@ RenameGenesSeurat <- function(obj,
 Apply renaming:
 ```{r}
 raw_data <- raw_data |>
-  RenameGenesSeurat(newnames = unfactor(raw_data@assays[["RNA"]]@meta.features[["feature_name"]]))
+  RenameGenesSeurat(newnames = as.character(raw_data@assays[["RNA"]]@meta.features[["feature_name"]]))
 ```
 
 # Remove leftover ENSG genes
 ```{r}
 # Extract used genes
-genes_used <- stringr::str_extract(unfactor(raw_data@assays[["RNA"]]@meta.features[["feature_name"]]),
+genes_used <- stringr::str_extract(as.character(raw_data@assays[["RNA"]]@meta.features[["feature_name"]]),
                                    pattern = "^(?!ENSG).+") |>
   na.omit()
 
@@ -59,6 +59,7 @@ rm(seurat_new)
 ```
 
 # Calculate percent mitochondrial genes
+Not really as mitochondrial genes have already been removed.
 ```{r}
 raw_data[["mito_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
                                                              pattern = "^MT")
@@ -71,7 +72,7 @@ raw_data[["mito_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
 # Calculate percent ribosomal genes
 ```{r}
 raw_data[["ribo_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
-                                                       pattern = "XXX")
+                                                       pattern = "^RP[SL]")
 
 # Or by a list of ribosomal genes
 # ribo_list <- c("XXX", "XXX")
@@ -82,21 +83,59 @@ raw_data[["ribo_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
 # Calculate percent hemoglobin genes
 ```{r}
 raw_data[["hemo_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
-                                                       pattern = "XXX")
+                                                       pattern = "^HB")
 # Or by a list of hemo genes
 # hemo_list <- c("XXX", "XXX")
 # raw_data[["ribo_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
 #                                                        features = hemo_list)
 ```
 
+Providing an AllCells column to the metadata to group on
+```{r}
+raw_data[["AllCells"]] <- "All"
+```
+
+
 # Violinplot of calculated features
 ```{r}
 VlnPlot(raw_data, features = c("percent.mt",
-                               "percent.mt.2",
                                "ribo_DTU",
                                "hemo_DTU"),
-        alpha = 0.02)
+        group.by = "AllCells",
+        alpha = 0.5)
 ```
+Getting metadata for a closer inspection
+```{r}
+meta_data <- raw_data@meta.data
+```
+
+
+Do some cells really have almost 100 % HB expression.
+Interrogating those cells
+```{r}
+## Getting cell ID for top 5 HB expressing cells
+top_hb <- meta_data |> 
+  arrange(desc(hemo_DTU)) |> 
+  top_n(5) |> 
+  rownames()
+
+## Would be nice to get a count matrix for all cells
+counts_mat <-GetAssayData(object = raw_data, assay = "RNA", layer = "counts")
+```
+Plotting features and counts vs mitochondrial genes
+```{r}
+library(tidyverse)
+
+ggplot(data = meta_data,
+       mapping = aes(x = nCount_RNA, 
+                     y = nFeature_RNA,
+                     color = percent.mt)) + 
+  geom_point(alpha = 0.3)
+
+
+```
+
+
 
 # Apply filtering
 ```{r}
