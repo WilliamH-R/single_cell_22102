@@ -1,0 +1,45 @@
+---
+title: "Detection of mitochondrial genes in Seurat object"
+format: html
+editor: visual
+---
+
+# Imports
+```{r}
+library(Seurat)
+library(tidyverse)
+```
+
+# Load RAW data
+```{r}
+raw_data <- readRDS("/home/projects/22102_single_cell_2025/projects/group_1/d72106bd-d03b-45e6-a0fa-ca2a831ef092.rds")
+```
+
+How are the gene names encodded
+```{r}
+head(rownames(raw_data))
+```
+As ENSEMBL IDs as required
+
+Saving the gene names in a new object
+```{r}
+gene_names <- rownames(raw_data)
+```
+
+
+# Creating list of mitochondrial genes from https://www.genenames.org/data/genegroup/#!/group/1974
+```{r}
+mito_genes <- read_tsv(file = "https://www.genenames.org/cgi-bin/genegroup/download?id=1974&type=node")
+
+## Selectin relevant variables for inspection
+mito_genes <- mito_genes |> 
+  dplyr::select(`Approved symbol`, `Ensembl gene ID`)
+
+View(mito_genes)
+```
+
+Now checking if the ENSEMBL IDs from the mitochondrial gene list is contained in the gene list from the seurat object
+```{r}
+sum(gene_names %in% mito_genes$`Ensembl gene ID`)
+```
+Sum is 0 - i.e. no mitochondrial genes in the raw seurat object. 
