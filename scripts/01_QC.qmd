@@ -4,6 +4,7 @@ library(Seurat)
 library(dplyr)
 library(ggplot2)
 library(viridis)
+library(clustree)
 ```
 
 # Load RAW data
@@ -203,6 +204,9 @@ dimensions <- dimensions |>
 ```
 
 # Do we have mitochondrial genes?
+
+## Calculate percent mitochondrial genes
+Not really as mitochondrial genes have already been removed.
 ```{r}
 mito_genes <- readr::read_tsv(file = "https://www.genenames.org/cgi-bin/genegroup/download?id=1974&type=node",
                               show_col_types = FALSE) |>
@@ -241,12 +245,12 @@ for (gene in ribo_genes) {
 
 ## Calculate percent ribosomal genes if found
 ```{r}
-# raw_data[["ribo_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
-#                                                        pattern = "XXX")
+raw_data[["ribo_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
+                                                       pattern = "^RP[SL]")
 
 # Or by a list of ribosomal genes
-raw_data[["ribo_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
-                                                       features = ribo_genes)
+# raw_data[["ribo_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
+#                                                        features = ribo_genes)
 ```
 
 # Do we have hemoglobin genes?
@@ -267,7 +271,7 @@ for (gene in hemo_genes) {
 ## Calculate percent hemoglobin genes
 ```{r}
 # raw_data[["hemo_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
-#                                                        pattern = "^HB(?!EGF$|S1L$|P1$).*")
+#                                                        pattern = "^HB")
 
 # Or by a list of hemo genes
 raw_data[["hemo_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
@@ -281,7 +285,7 @@ raw_data[["hemo_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
 # for (gene in malat_genes) {
 #   if (gene %in% rownames(raw_data)) {
 #     print(glue::glue("Found a specific gene: {gene}"))
-#     raw_data <- raw_data[!grepl("MALAT1", rownames(raw_data)), ]
+#     raw_data <- raw_data[!grepl(gene, rownames(raw_data)), ]
 #   }
 # }
 # 
@@ -310,35 +314,22 @@ for (feature in features) {
 }
 ```
 
-
+# Counts vs Features plot
+Getting metadata for a closer inspection
 ```{r}
-subset_by_quantile <- function(seurat_object,
-                               feature,
-                               lower_quantile = 0.05,
-                               upper_quantile = 0.95) {
-  
-  # Ensure the feature exists in the metadata
-  if (!feature %in% colnames(seurat_object@meta.data)) {
-    stop(paste("Feature", feature, "not found in Seurat object metadata."))
-  }
-  
-  # Extract the feature values
-  feature_values <- seurat_object@meta.data[[feature]]
-  
-  # Calculate quantile thresholds
-  lower_bound <- quantile(feature_values, probs = lower_quantile, na.rm = TRUE)
-  upper_bound <- quantile(feature_values, probs = upper_quantile, na.rm = TRUE)
-  
-  # Subset cells within the quantile range
-  filtered_cells <- seurat_object@meta.data[feature_values >= lower_bound &
-                                              feature_values <= upper_bound, ,
-                                            drop = FALSE]
-  
-  # Create the subsetted Seurat object
-  subsetted_seurat <- subset(seurat_object, cells = rownames(filtered_cells))
-  
-  return(subsetted_seurat)
-}
+meta_data <- raw_data@meta.data
+```
+
+
+Plotting features and counts vs mitochondrial genes
+```{r}
+ggplot(data = meta_data,
+       mapping = aes(x = nCount_RNA, 
+                     y = nFeature_RNA,
+                     color = percent.mt)) + 
+  geom_point(alpha = 0.3)
+
+
 ```
 
 
@@ -406,7 +397,6 @@ raw_data <- FindClusters(raw_data,
 
 ## Find optimal resolution
 ```{r}
-library(clustree)
 clustree(raw_data, prefix = "RNA_snn_res.")
 ```
 
@@ -465,4 +455,3 @@ ggplot(contingency_table, aes(x = Cluster,
 saveRDS(raw_data, "../data/filtered_data.rds")
 saveRDS(dimensions, "../data/dimensions.rds")
 ```
-
