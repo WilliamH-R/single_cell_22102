@@ -9,7 +9,7 @@ library(clustree)
 
 # Load RAW data
 ```{r}
-raw_data <- readRDS("../data/raw_data.rds")
+raw_data <- readRDS("../raw_data/raw_data.rds")
 
 raw_data[["all"]] <- "all_genes"
 ```
