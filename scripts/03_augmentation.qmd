@@ -1,0 +1,213 @@
+# Imports
+```{r}
+library(Seurat)
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+library(viridis)
+library(future)
+```
+
+# Load data
+```{r}
+data <- readRDS("../data/filtered_data.rds")
+```
+
+# Integration
+Split by problematic feature.
+```{r}
+data[["RNA"]] <- split(data[["RNA"]], f = data$donor_id)
+```
+
+Preprocess pr. subset of the feature
+```{r}
+#| echo: false
+#| message: false
+
+data <- NormalizeData(data)
+data <- FindVariableFeatures(data)
+data <- ScaleData(data)
+data <- RunPCA(data,
+               reduction.name = "pca_harmony")
+```
+
+Integrate
+```{r}
+#| warnings: false
+
+#To speed up the following process, we will work in parallel
+plan("multisession", workers = 4) # Do not change it, or it might crash.
+options(future.globals.maxSize = 8000 * 1024^2)
+
+#Harmony (method=HarmonyIntegration)
+data <- IntegrateLayers(
+  object = data,
+  method = HarmonyIntegration,
+  orig.reduction = "pca_harmony",
+  new.reduction = "Harmony_Integration",
+  verbose = FALSE
+)
+
+#Set the future plan back to "sequential" after running integration
+plan("sequential")
+
+#Re-join the split layers
+data[["RNA"]] <- JoinLayers(data[["RNA"]])
+```
+
+Run UMAP
+```{r}
+data <- RunUMAP(data,
+                dims = 1:30,
+                reduction = "Harmony_Integration",
+                reduction.name = "umap_harmony")
+```
+
+Find clusters
+```{r}
+#| echo: false
+#| messages: false
+
+reductions <- c("RNA_snn_res.0.1",                      
+                "RNA_snn_res.0.3",                         
+                "RNA_snn_res.0.5",                         
+                "RNA_snn_res.0.7",                         
+                "RNA_snn_res.0.9",                         
+                "RNA_snn_res.1.1",                         
+                "RNA_snn_res.1.3",                         
+                "RNA_snn_res.1.5")
+reductions_new <- c("ni.0.1",                      
+                    "ni.0.3",                         
+                    "ni.0.5",                         
+                    "ni.0.7",                         
+                    "ni.0.9",                         
+                    "ni.1.1",                         
+                    "ni.1.3",                         
+                    "ni.1.5")
+integrated_reductions_new <- c("i.0.1",                      
+                               "i.0.3",                         
+                               "i.0.5",                         
+                               "i.0.7",                         
+                               "i.0.9",                         
+                               "i.1.1",                         
+                               "i.1.3",                         
+                               "i.1.5")
+
+for (i in seq_along(reductions)) {
+  colnames(data@meta.data)[colnames(data@meta.data) == reductions[[i]]] <- reductions_new[[i]]
+}
+
+
+data <- FindNeighbors(data,
+                      dims = 1:30,
+                      reduction = "Harmony_Integration")
+data <- FindClusters(data,
+                     resolution = c(0.1, 0.3, 0.5, 0.7, 0.9, 1.1, 1.3, 1.5))
+
+for (i in seq_along(reductions)) {
+  colnames(data@meta.data)[colnames(data@meta.data) == reductions[[i]]] <- integrated_reductions_new[[i]]
+}
+```
+
+Visualize UMAP
+```{r}
+p1 <- DimPlot(data,
+              reduction = 'umap',
+              group.by = 'donor_id') +
+  ggtitle("UMAP data")
+p3 <- DimPlot(data,
+              reduction = "umap_harmony",
+              group.by = "donor_id") +
+  ggtitle("UMAP Harmony")
+
+wrap_plots(p1, p3, nrow = 1) +
+  plot_layout(guides = "collect")
+```
+
+```{r}
+p1 <- DimPlot(data,
+              reduction = 'umap',
+              group.by = 'cell_type',
+              label = TRUE) +
+  NoLegend() +
+  ggtitle("UMAP data")
+p3 <- DimPlot(data,
+              reduction = "umap_harmony",
+              group.by = "cell_type",
+              label = TRUE) +
+  NoLegend() +
+  ggtitle("UMAP Harmony")
+
+wrap_plots(p1, p3, nrow = 1) +
+  plot_layout(guides = "collect")
+```
+
+See Tileplot again
+```{r}
+# Assuming your data variables are defined as in the example
+contingency_table <- table(data$donor_disease,
+                           data@meta.data$i.0.7) |>
+  as.data.frame()
+colnames(contingency_table) <- c("DonorID", "Cluster", "Count")
+
+# Scale data pr. Donor
+contingency_table <- contingency_table |>
+  group_by(DonorID) |>
+  mutate(Count_scaled = Count / sum(Count))
+
+ggplot(contingency_table, aes(x = Cluster,
+                              y = DonorID,
+                              fill = Count_scaled)) +
+  geom_tile() +
+  scale_fill_viridis_c(option = "D") + # Option "D" is one of the default viridis color maps
+  theme_minimal() +
+  labs(title = "Tileplot of Donor ID and Cluster",
+       x = "Cluster",
+       y = "Donor ID",
+       fill = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+See Tileplot again
+```{r}
+# Assuming your data variables are defined as in the example
+contingency_table <- table(data$donor_disease,
+                           data@meta.data$scType_celltype) |>
+  as.data.frame()
+colnames(contingency_table) <- c("DonorID", "Cluster", "Count")
+
+# Scale data pr. Donor
+contingency_table <- contingency_table |>
+  group_by(DonorID) |>
+  mutate(Count_scaled = Count / sum(Count))
+
+ggplot(contingency_table, aes(x = Cluster,
+                              y = DonorID,
+                              fill = Count_scaled)) +
+  geom_tile() +
+  scale_fill_viridis_c(option = "D") + # Option "D" is one of the default viridis color maps
+  theme_minimal() +
+  labs(title = "Tileplot of Donor ID and Cluster",
+       x = "Cluster",
+       y = "Donor ID",
+       fill = "Count") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+```{r}
+views <- c("CHIP", "ProjectID", "MUTATION.GROUP", "LANE", "Clone",
+           "disease", "sex", "self_reported_ethnicity",
+           "development_stage")
+
+for (view in views) {
+  p <- DimPlot(data,
+               reduction = "umap_harmony",
+               group.by = view)
+  print(p)
+} 
+```
+
+# Save object
+```{r}
+saveRDS(raw_data, "../data/augmented_data.rds")
+```
