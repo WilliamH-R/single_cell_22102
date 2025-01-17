@@ -209,5 +209,5 @@ for (view in views) {
 
 # Save object
 ```{r}
-saveRDS(raw_data, "../data/augmented_data.rds")
+saveRDS(data, "../data/augmented_data.rds")
 ```
