@@ -7,9 +7,6 @@
 ####################################################################################################################################################
 
 library(Seurat)
-library(hdf5r)
-library(tidyverse)
-library(SeuratDisk)
 
 
 ### Acquiring data from Jakob
