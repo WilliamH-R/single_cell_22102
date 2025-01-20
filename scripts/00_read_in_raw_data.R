@@ -33,3 +33,4 @@ if (!dir.exists("raw_data/")) {
 
 ## Save raw data locally
 saveRDS(object = test_data, file = "raw_data/raw_data.rds")
+rm(test_data)

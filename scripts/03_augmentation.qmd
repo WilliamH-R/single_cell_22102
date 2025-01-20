@@ -1,16 +1,18 @@
 # Imports
 ```{r}
-library(Seurat)
-library(dplyr)
-library(ggplot2)
-library(patchwork)
-library(viridis)
-library(future)
+suppressPackageStartupMessages({
+ library(Seurat)
+ library(dplyr)
+ library(ggplot2)
+ library(patchwork)
+ library(viridis)
+ library(future)
+})
 ```
 
 # Load data
 ```{r}
-data <- readRDS("../data/filtered_data.rds")
+data <- readRDS("../data/filtered_no_doublets_data.rds")
 ```
 
 # Integration
@@ -112,7 +114,7 @@ for (i in seq_along(reductions)) {
 Visualize UMAP
 ```{r}
 p1 <- DimPlot(data,
-              reduction = 'umap',
+              reduction = 'UMAP',
               group.by = 'donor_id') +
   ggtitle("UMAP data")
 p3 <- DimPlot(data,
@@ -126,7 +128,7 @@ wrap_plots(p1, p3, nrow = 1) +
 
 ```{r}
 p1 <- DimPlot(data,
-              reduction = 'umap',
+              reduction = 'UMAP',
               group.by = 'cell_type',
               label = TRUE) +
   NoLegend() +

@@ -3,6 +3,7 @@
 suppressPackageStartupMessages({
  library(Seurat)
  library(scDblFinder)
+ library(scater) # For the plotUMAP function
 })
 ```
 
@@ -21,13 +22,38 @@ sce.dbl <- scDblFinder(sce,
                        samples = "donor_id",
                        clusters = colLabels(sce))
 
-plotUMAP(sce.dbl, colour_by="scDblFinder.score")
+plotUMAP(sce.dbl,
+         colour_by = "scDblFinder.score")
 
 table(sce.dbl$scDblFinder.class)
 
 plotColData(sce.dbl,
-            x="RNA_snn_res.0.3",
-            y="scDblFinder.score",
-            colour_by=("scDblFinder.class"))
+            x = "RNA_snn_res.0.3",
+            y = "scDblFinder.score",
+            colour_by = ("scDblFinder.class"))
+```
+
+# Subset to not include doublets
+```{r}
+filtered_data <- sce.dbl |>
+  as.Seurat() |>
+  subset(subset = scDblFinder.class == "singlet")
+```
+
+# Update dimensions object
+```{r}
+dimensions <- readRDS("../data/dimensions.rds")
+
+# Update dimensions overview
+dimensions <- dimensions |>
+  dplyr::add_row(step = "Remove doublets",
+                 n_genes = nrow(filtered_data),
+                 n_cells = ncol(filtered_data))
+```
+
+# Save objects
+```{r}
+saveRDS(filtered_data, "../data/filtered_no_doublets_data.rds")
+saveRDS(dimensions, "../data/dimensions.rds")
 ```
 

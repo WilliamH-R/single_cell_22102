@@ -5,6 +5,7 @@ editor: visual
 ---
 
 ### Loading libraries and data
+
 ```{r}
 obj <- readRDS(file = "../data/augmented_data.rds")
 
@@ -14,6 +15,7 @@ library(dplyr)
 ```
 
 Looking at the basic UMAP on integrated data
+
 ```{r}
 plot_reduction_03 <- DimPlot(object = obj, reduction = "umap_harmony", 
         group.by = "i.0.3", 
@@ -27,87 +29,87 @@ plot_reduction_05 <- DimPlot(object = obj, reduction = "umap_harmony",
 plot_reduction_03 + plot_reduction_05
 ```
 
-
-
-By eyeballing we find that the clustering of resolution 0.5 is way to high - i.e. we have too many clusters on a PBMC dataset. The cluster that we would suspect to be monocytes (top left) contains 5 different clusters, which will probably be very hard to cluster out into distinct monocyte populations. 
+By eyeballing we find that the clustering of resolution 0.5 is way to high - i.e. we have too many clusters on a PBMC dataset. The cluster that we would suspect to be monocytes (top left) contains 5 different clusters, which will probably be very hard to cluster out into distinct monocyte populations.
 
 Setting `Idents()` to i.0.3
+
 ```{r}
 Idents(obj) <- "i.1.1"
 ```
 
-
 ## Identification of differentialle expressed genes across clusters
-
 
 *Doing with the FindConservedMarkers function*
 
 Cluster 0
+
 ```{r}
 FindConservedMarkers(object = obj, ident.1 = 0,
                                             assay = "RNA",
                                             grouping.var = "disease",
                                             min.cells.group = 0.9)
 ```
-So based on this there is no question that cluster 0 is a T-cell cluster as both LTB (lymphotoxin beta) and IL7R (CD127) which are very specific to T-cells are overexpressed. 
 
-However it seems as if cluster 1 is a T-cell cluster too. We need to use FindMarkers that differ between these two clusters. 
-As we suspect that cluster 1 is a CD8 cluster we set ident.1 to cluster 1 and ident.2 to cluster 0 and hope to identify overexpression of CD8 and cytotoxic markers.
+So based on this there is no question that cluster 0 is a T-cell cluster as both LTB (lymphotoxin beta) and IL7R (CD127) which are very specific to T-cells are overexpressed.
+
+However it seems as if cluster 1 is a T-cell cluster too. We need to use FindMarkers that differ between these two clusters. As we suspect that cluster 1 is a CD8 cluster we set ident.1 to cluster 1 and ident.2 to cluster 0 and hope to identify overexpression of CD8 and cytotoxic markers.
+
 ```{r}
 FindMarkers(object = obj, ident.1 = "1", ident.2 = "0")
 ```
-The genes GZMB, GZMH and GNLY as well as LTB are highly associated to cytotoxicity - all of these are significantly upregulated by cluster 1 compared to 0. Even more CD8A is also enhanced in cluster 1 - leading to the conclusion that cluster 1 is CD8+ T cells. 
+
+The genes GZMB, GZMH and GNLY as well as LTB are highly associated to cytotoxicity - all of these are significantly upregulated by cluster 1 compared to 0. Even more CD8A is also enhanced in cluster 1 - leading to the conclusion that cluster 1 is CD8+ T cells.
 
 We show this in a violinplot
+
 ```{r}
 VlnPlot(object = obj, features = c("GZMB", "GZMK", "CD8A", "IL7R"), 
         alpha = 0.1, 
         idents = c("0", "1", "3"))
 ```
+
 ```{r}
 FeaturePlot(object = obj, features = c("GZMB", "GZMK", "CD8A", "IL7R"), reduction = "umap_harmony")
 ```
+
 CD8A clearly maps to cluster 1 with the cytotoxic markers GZM also mapping to cluster 1 and 3. Thus, cluster 1 is CD8+ T cells (CTL)
 
-
-
-
 ### Cluster 1 vs. 3
-Next thing is to find cluster 3, which is very close to cluster 1. We use Findmarkers on cluster 3 vs. 1. We suspect the cells to be NK cells, as they cluster closely to CTL and NK cells are cytotoxic too. 
+
+Next thing is to find cluster 3, which is very close to cluster 1. We use Findmarkers on cluster 3 vs. 1. We suspect the cells to be NK cells, as they cluster closely to CTL and NK cells are cytotoxic too.
+
 ```{r}
 FindMarkers(object = obj, 
             ident.1 = "3", 
             ident.2 = "1", 
             min.pct = 0.1)
 ```
-CD8B is the most downregulated gene by cluster 3 vs cluster 1. CD8B has a log2FC at -2.2 meaning that cluster 3 is highly negative for CD8 markers and also CD3D and CD3G meaning that they are not CD3 gamma-delta T-cells. TRAC and TRBC are also downregulated meaning, that cluster 3 cells are not T cells. 
-FCGR3A (CD16) is overexpressed by log2FC = 1.83 in cluster 3. A lot of other cytoxic proteins are expressed by cluster 3. 
-LAT2 is lowly expressed by NK cells, but not by T cells at all. 
-Comparing cluster 3 to all other markers we find that cytotoxic markers are highly conserved meaning that the cells are cytotoxic but not cluster 1 (CD8) and they express CD16, so cluster 3 is assigned to NK cells. 
 
+CD8B is the most downregulated gene by cluster 3 vs cluster 1. CD8B has a log2FC at -2.2 meaning that cluster 3 is highly negative for CD8 markers and also CD3D and CD3G meaning that they are not CD3 gamma-delta T-cells. TRAC and TRBC are also downregulated meaning, that cluster 3 cells are not T cells. FCGR3A (CD16) is overexpressed by log2FC = 1.83 in cluster 3. A lot of other cytoxic proteins are expressed by cluster 3. LAT2 is lowly expressed by NK cells, but not by T cells at all. Comparing cluster 3 to all other markers we find that cytotoxic markers are highly conserved meaning that the cells are cytotoxic but not cluster 1 (CD8) and they express CD16, so cluster 3 is assigned to NK cells.
 
+Cluster 5 Identification of conserved markers. We compare to the three other T/NK cell clusters as we want to ascertain the difference between these and cluster 5. The hypothesis is that cells are either NK-T cells or are activated T cells.
 
-
-Cluster 5 
-Identification of conserved markers. We compare to the three other T/NK cell clusters as we want to ascertain the difference between these and cluster 5. 
-The hypothesis is that cells are either NK-T cells or are activated T cells. 
 ```{r}
 FindMarkers(object = obj, 
             ident.1 = "5", 
             ident.2 = c("0", "1", "3"), 
             grouping.var = "disease")
 ```
-CD69 is a T-cell activation marker which could lead us to conclude that the cells in cluster 5 are activated T cells. But some associate closely to the NK-cell cluster, so could some be NK cells. 
+
+CD69 is a T-cell activation marker which could lead us to conclude that the cells in cluster 5 are activated T cells. But some associate closely to the NK-cell cluster, so could some be NK cells.
 
 Comparing to the NK cells only (cluster 3)
+
 ```{r}
 FindMarkers(object = obj, 
             ident.1 = "5", 
             ident.2 = "3")
 ```
-They overexpress CD3D and CD3G which are part of the T-cell receptor complex. So they must be some kind of T cells. 
+
+They overexpress CD3D and CD3G which are part of the T-cell receptor complex. So they must be some kind of T cells.
 
 Comparisson to cluster 1 (CTL)
+
 ```{r}
 FindMarkers(object = obj, 
             ident.1 = "5", 
@@ -115,107 +117,115 @@ FindMarkers(object = obj,
 ```
 
 Showing the expression of some important markers across the CD4 T-cell (0), CD8 (1), NK (3) and unknown (5)
+
 ```{r}
 VlnPlot(object = obj, 
         features = c("CD8A", "NCAM1", "CD69", "FCGR3A"), 
         idents = c("1", "0", "3", "5"), 
         alpha = 0.1)
 ```
-From the above we find that cluster 1 is clearly CD8 T cells. Cluster 5 expresses the activation marker CD69 but this marker can also be activated by NK cells. 
-FCGR3A (CD16) is a classical mature NK cell marker and is almost only expressed by cluster 3. But some NK cells may be CD16dim. 
-We have to ascertain if cluster 5 represents NK/T-cells ore some other forms of innate lymphoid cells. 
-Read some litterature about NKT cells and alike. 
 
-
+From the above we find that cluster 1 is clearly CD8 T cells. Cluster 5 expresses the activation marker CD69 but this marker can also be activated by NK cells. FCGR3A (CD16) is a classical mature NK cell marker and is almost only expressed by cluster 3. But some NK cells may be CD16dim. We have to ascertain if cluster 5 represents NK/T-cells ore some other forms of innate lymphoid cells. Read some litterature about NKT cells and alike.
 
 Cluster 7
+
 ```{r}
 FindConservedMarkers(object = obj, 
                      ident.1 = "7", 
                      grouping.var = "disease")
 ```
 
-
 Plotting some of the top DE genes in a violinplot
+
 ```{r}
 VlnPlot(object = obj, features = c("PPBP", "GP1BB", "PF4"))
 ```
-Both PPBP, GP1BB and PF4 are highly expressed by platelets, so cluster 7 is platelets. 
 
-
+Both PPBP, GP1BB and PF4 are highly expressed by platelets, so cluster 7 is platelets.
 
 Cluster 8
+
 ```{r}
 FindConservedMarkers(object = obj, 
                      ident.1 = "8", 
                      grouping.var = "disease")
 ```
-SERPINF1 is expressed by pDC. 
 
-Cluster 2 "overshadows" what is going on in cluster 8, so let's try do FindMarkers in cluster 8 vs. cluster 6. 
+SERPINF1 is expressed by pDC.
+
+Cluster 2 "overshadows" what is going on in cluster 8, so let's try do FindMarkers in cluster 8 vs. cluster 6.
+
 ```{r}
 FindMarkers(object = obj, 
             ident.1 = "8", 
             ident.2 = "2")
 ```
-According to human protein atlas ITM2C and SERPINF1 are highly expressed by pDC
-Doing a violinplot on cluster 8 vs. 6.
+
+According to human protein atlas ITM2C and SERPINF1 are highly expressed by pDC Doing a violinplot on cluster 8 vs. 6.
+
 ```{r}
 VlnPlot(object = obj, 
         features = c("ITM2C", "ALOX5AP", "SERPINF1", "TCF4"), 
         idents = c("8", "2"))
 ```
+
 So cluster 8 is DC (probably both mDC and pDC).
 
 Cluster 4
+
 ```{r}
 FindConservedMarkers(object = obj, ident.1 = "4", grouping.var = "disease")
 ```
 
 CD79A and CD83 are expressed by B cells. So is MS4A1
+
 ```{r}
 VlnPlot(object = obj, features = c("CD83", "CD79A", "MS4A1"))
 ```
-CD83 is actually expressed by several clusters and cells (monocytes and DC), byt only CD79A and MS4A1 are expressed by cluster 4, so cluster 4 has to be B-cells. 
 
+CD83 is actually expressed by several clusters and cells (monocytes and DC), byt only CD79A and MS4A1 are expressed by cluster 4, so cluster 4 has to be B-cells.
 
 Cluster 2
+
 ```{r}
 FindConservedMarkers(object = obj, 
                      ident.1 = "2", 
                      grouping.var = "disease")
 ```
-LYZ is expressed by both monocytes and mDC. So is FCN1, IFI30 and FCER1G. Could be that mDC are within the cluster of monocytes. 
 
-We have to find the difference between cluster 2 and 6. 
+LYZ is expressed by both monocytes and mDC. So is FCN1, IFI30 and FCER1G. Could be that mDC are within the cluster of monocytes.
+
+We have to find the difference between cluster 2 and 6.
+
 ```{r}
 FindMarkers(object = obj, 
             ident.1 = "2", 
             ident.2 = "6")
 ```
-FCGR3A is actually CD16, which is an immunoglobulin receptor that mediates opsonization - a non-classical monocyte feature. Additional FCGR3A is overexpressed by non-classical monocytes compared to classical monocytes according to the human protein atlas. 
-IFITM2 is also overexpressed by non-classical monocytes as is LST1. 
 
+FCGR3A is actually CD16, which is an immunoglobulin receptor that mediates opsonization - a non-classical monocyte feature. Additional FCGR3A is overexpressed by non-classical monocytes compared to classical monocytes according to the human protein atlas. IFITM2 is also overexpressed by non-classical monocytes as is LST1.
 
+We can just check CD14 (classical monocyte marker) and FCGR3A (CD16) expression in a FeaturePlot. FCER1G is a classical monocyte marker.
 
-We can just check CD14 (classical monocyte marker) and FCGR3A (CD16) expression in a FeaturePlot. FCER1G is a classical monocyte marker. 
 ```{r}
 FeaturePlot(object = obj, features = c("CD14", "FCER1G", "FCGR3A"), reduction = "umap_harmony")
 ```
-We find that cells in the cluster 3 also expresses CD16 - the NK cells. 
 
-So cluster 2 is classical monocytes.
-Cluster 6 is non-classical monocytes.
+We find that cells in the cluster 3 also expresses CD16 - the NK cells.
 
-The only issue is the cluster 5, which could possible be ascribed to activated T-cells. Another way to solve the clustering would be to change the resolution of the clustering to 04. 
+So cluster 2 is classical monocytes. Cluster 6 is non-classical monocytes.
 
+The only issue is the cluster 5, which could possible be ascribed to activated T-cells. Another way to solve the clustering would be to change the resolution of the clustering to 04.
 
-For now we set the idents in the cells 
+For now we set the idents in the cells
+
 ```{r}
 ## Checking number of cells per cluster
 table(obj@meta.data$i.0.3)
 ```
+
 Setting the cell identities and setting the cell identities to the column "dtu_cell_type"
+
 ```{r}
 Idents(obj) <- "i.0.3"
 
@@ -237,18 +247,15 @@ obj[["dtu_cell_type"]] <- Idents(object = obj)
 
 ```
 
-
 Checking in UMAP
+
 ```{r}
 DimPlot(object = obj, reduction = "umap_harmony", label = T, group.by = "dtu_cell_type")
 ```
 
 Saving file with annotated clusters
+
 ```{r}
 saveRDS(object = obj, 
         file = "../data/annotated_data.rds")
 ```
-
-
-
-

@@ -1,0 +1,11 @@
+```{r}
+data <- readRDS("")
+  
+  sce.dbl <- scDblFinder(sce,
+                       samples = "donor_id",
+                       clusters = colLabels(sce))
+
+plotUMAP(sce.dbl,
+         colour_by = "scDblFinder.score")
+```
+
