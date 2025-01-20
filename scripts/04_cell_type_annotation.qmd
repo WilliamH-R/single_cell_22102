@@ -215,7 +215,7 @@ For now we set the idents in the cells
 ## Checking number of cells per cluster
 table(obj@meta.data$i.0.3)
 ```
-Setting the cell identities
+Setting the cell identities and setting the cell identities to the column "dtu_cell_type"
 ```{r}
 Idents(obj) <- "i.0.3"
 
@@ -225,7 +225,7 @@ obj <- RenameIdents(object = obj,
                                 "2" = "Classical monocytes",
                                 "3" = "NK cells",
                                 "4" = "B cells",
-                                "5" = "NKT cells",
+                                "5" = "NKT cells?",
                                 "6" = "Non-classical monocytes",
                                 "7" = "Platelets",
                                 "8" = "DC")
@@ -243,6 +243,11 @@ Checking in UMAP
 DimPlot(object = obj, reduction = "umap_harmony", label = T, group.by = "dtu_cell_type")
 ```
 
+Saving file with annotated clusters
+```{r}
+saveRDS(object = obj, 
+        file = "../data/annotated_data.rds")
+```
 
 
 

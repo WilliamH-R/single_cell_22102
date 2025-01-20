@@ -1,0 +1,7 @@
+1. How do we calculate HB genes that are not followed by ESP - the regex ^HB(!?ESP) doesn't work for Seurat as it is PERL code. 
+
+2. Do we believe that some cells express almost 100% HB genes, and cells only express < 1% RB genes. It would be nice to interrogate the top 5 HB expressors and look at the counts for their HB genes.
+
+3. Ribosomal genes. Do we believe that the ribosomal gene expression is so low. 
+
+4. 

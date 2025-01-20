@@ -5,13 +5,9 @@ Data from: [cellxgene](https://cellxgene.cziscience.com/collections/0aab20b3-c30
 Link to GitHub: [GitHub](https://github.com/WilliamH-R/single_cell_22102)
 
 
-
-
-Selection of samples: 
-Based on sex, mutation and cells 
-Selected donor IDs CH-21-XXX
-- 002, 013, 020, 031 - Healthy donors two males and two females with the most cells. We chose both sexes to perform integration. 
-- 006 (woman), 046 (male with DNMT3A), 014 and 033 (males with TET2 with most cells) - these samples are chosen because they have data on somatic mutations in individual cells.
-- 004, 037, 034, 029 (These donors only had NAs from the DNA-Seq but had the most cells)
-
-
+Selection of samples.
+Based on sex, mutation and cells. 
+Selected donor IDs - CH-21/20-XXX
+- 002, 013, 020, 031 - Healthy donors two males and two females with the most cells.
+- 006 (female), 046 (male), 014 and 033 (males with TET2 with most cells). They are chosen because they have the most individual cells. 
+- 004, 037, 034, 029 - these donors only had NAs in the DNASeq data but had the most cells. 
