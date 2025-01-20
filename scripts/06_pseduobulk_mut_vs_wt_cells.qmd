@@ -1,0 +1,195 @@
+---
+title: "Differential gene expression on mut vs. wt cell subsets"
+format: html
+editor: visual
+---
+
+*Purpose of script:*
+In the data we have annotated whether the cell is mutant or not and we want to ascertain whether this impacts the gene expression of the cells. 
+The hypothesis is that especially the monocytes have a different gene expression as these cells are affected by the CHIP-mutations. 
+
+
+## Loading data and libraries
+
+```{r}
+library(Seurat)
+library(dplyr)
+library(ggplot2)
+library(viridis)
+library(patchwork)
+
+obj <- readRDS(file = "data/annotated_data.rds")
+```
+
+Exploring the data by looking at the metadata
+```{r}
+meta_data <- obj@meta.data
+```
+
+Filtering out unwanted variables in the metadata
+```{r}
+meta_data <- meta_data |> 
+  select(!c(nCount_HTO, nCount_SCT, nFeature_HTO, nFeature_SCT, orig.ident, HTO_secondID, HTO_classification.global, CHIP, LANE, ProjectID, HTO_maxID, HTO_margin, ni.0.1:ni.1.5, sex_ontology_term_id, assay_ontology_term_id, suspension_type))
+
+
+meta_data <- meta_data |> 
+  select(!c(HTOID, pANN, development_stage_ontology_term_id, cell_type_ontology_term_id, self_reported_ethnicity_ontology_term_id, is_primary_data, tissue_type, tissue_ontology_term_id, organism_ontology_term_id, disease_ontology_term_id))
+
+meta_data <- meta_data |> 
+  select(!c(organism, observation_joinid, tissue, self_reported_ethnicity, development_stage, all, ribo_DTU, hemo_DTU, percent.mt))
+```
+
+
+
+Making table with relevant cell types and data on their mutational status
+```{r}
+table(meta_data$dtu_cell_type, meta_data$Clone)
+```
+
+```{r}
+df_mutational_status <- table(meta_data$dtu_cell_type, meta_data$Clone) |> 
+  as.data.frame() |> 
+  rename(fraction = Var1, 
+         mut_status = Var2, 
+         number = Freq)
+```
+
+Plotting
+```{r}
+plot_abs_counts <- ggplot(data = df_mutational_status, 
+       mapping = aes(x = fraction,
+                     y = number, 
+                     fill = mut_status)) +
+         geom_col() +
+  labs(x = "Cell population", 
+       y = "Number of cells", 
+       fill = "Mutational status") +
+  scale_fill_viridis_d() +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45)) +
+  theme(axis.text.x = element_text(hjust = 1))
+
+plot_relative_counts <- ggplot(data = df_mutational_status, 
+       mapping = aes(x = fraction,
+                     y = number, 
+                     fill = mut_status)) +
+         geom_col(position = position_fill()) +
+  labs(x = "Cell population", 
+       y = "Frequency of cells", 
+       fill = "Mutational status") +
+  scale_fill_viridis_d() +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45)) +
+  theme(axis.text.x = element_text(hjust = 1))
+
+
+plot_abs_counts + plot_relative_counts
+```
+We make the same analysis with NAs removed
+```{r}
+plot_abs_counts_not_na <- df_mutational_status |>
+  filter(!mut_status == "NA") |>
+  ggplot(mapping = aes(x = fraction,
+                       y = number, 
+                       fill = mut_status)) +
+  geom_col() +
+  labs(x = "Cell population", 
+       y = "Number of cells", 
+       fill = "Mutational status") +
+  scale_fill_viridis_d() +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+plot_relative_counts_not_na <- df_mutational_status |>
+  filter(!mut_status == "NA") |>
+  ggplot(mapping = aes(x = fraction,,
+                     y = number, 
+                     fill = mut_status)) +
+         geom_col(position = position_fill()) +
+  labs(x = "Cell population", 
+       y = "Frequency of cells", 
+       fill = "Mutational status") +
+  scale_fill_viridis_d() +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45)) +
+  theme(axis.text.x = element_text(hjust = 1))
+
+
+plot_abs_counts_not_na + plot_relative_counts_not_na
+
+```
+We see that for most of the cell fractions the majority of cells are WT, wheras for classical monocytes and DC the majority are mutant. 
+
+*To continue with the pseudobulk differential gene expression analysis we have to remove the cells that have NA in their `Clone`variable*
+
+Removing cells with NA using subset
+
+```{r}
+obj_subset <- subset(x = obj, subset = Clone == c("Mutant", "Wildtype"))
+```
+Looking at metadata and removing NA as a level
+```{r}
+meta_subset <- obj_subset@meta.data
+
+meta_subset <- meta_subset |> 
+  mutate(Clone = droplevels(Clone))
+
+table(meta_subset$Clone)
+```
+Filtering out irrelevant data
+```{r}
+meta_subset <- meta_subset |> 
+  select(!c(nCount_HTO, nCount_SCT, nFeature_HTO, nFeature_SCT, orig.ident, HTO_secondID, HTO_classification.global, CHIP, LANE, ProjectID, HTO_maxID, HTO_margin, ni.0.1:ni.1.5, sex_ontology_term_id, assay_ontology_term_id, suspension_type))
+
+
+meta_subset <- meta_subset |> 
+  select(!c(HTOID, pANN, development_stage_ontology_term_id, cell_type_ontology_term_id, self_reported_ethnicity_ontology_term_id, is_primary_data, tissue_type, tissue_ontology_term_id, organism_ontology_term_id, disease_ontology_term_id))
+
+meta_subset <- meta_subset |> 
+  select(!c(organism, observation_joinid, tissue, self_reported_ethnicity, development_stage, all, ribo_DTU, hemo_DTU, percent.mt, assay, donor_disease))
+
+View(meta_subset)
+```
+
+
+Preparing the data
+```{r}
+obj_subset$samples <- paste0(obj_subset$)
+
+
+
+# Aggregate counts to sample level
+counts <- AggregateExpression(obj_subset, 
+                              group.by = c("dtu_cell_type", "Clone"),
+                              assays =  "RNA",
+                              return.seurat = FALSE)
+count <- counts$RNA
+
+
+# transpose
+counts.t <- t(count)
+
+# convert to data.frame
+counts.t <- as.data.frame(counts.t)
+
+# get values where to split
+splitRows <- gsub('_.*', '', rownames(counts.t))
+
+# split data.frame
+cts.split <- split.data.frame(counts.t,
+                              f = factor(splitRows))
+
+
+# fix colna"CD14+ Monocyte"# fix colnames and transpose
+cts.split.modified <- lapply(cts.split, function(x){
+    rownames(x) <- gsub('.*_(.*)', '\\1', rownames(x)) #whatever comes after the underscore in the row names will be retained in the final result.
+    t(x)
+})
+```
+
+
+
+
+
+
