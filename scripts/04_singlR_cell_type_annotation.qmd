@@ -1,0 +1,37 @@
+```{r}
+obj <- readRDS(file = "../data/augmented_data.rds")
+
+
+library(Seurat)
+library(SingleR)
+```
+
+```{r}
+# Load the dataset
+pbmcsca <- readRDS("/home/projects/22102_single_cell/day3/pbmcsca.rds")
+```
+
+```{r}
+# Transform the reference Seurat Object to a SCE object like done yesterday.
+ref <- as.SingleCellExperiment(pbmcsca, assay = "RNA")
+
+pbmc_counts <- GetAssayData(obj, assay = "RNA", layer = 'counts')
+```
+```{r}
+cell_type_pred <- SingleR(test = pbmc_counts,
+                ref = ref,
+                labels = ref$CellType,
+                de.method="wilcox")
+saveRDS(cell_type_pred, "../data/cell_type_pred_singleR.rds")
+```
+
+```{r}
+cell_type_pred <- readRDS("../data/cell_type_pred_singleR.rds")
+obj$cell_type_automatic <- cell_type_pred$pruned.labels[match(rownames(obj@meta.data), rownames(cell_type_pred))]
+
+DimPlot(obj, reduction = 'umap_harmony', group.by = 'cell_type_automatic', label = TRUE) + NoLegend()
+```
+
+
+
+
