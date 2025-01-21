@@ -23,8 +23,7 @@ data[["RNA"]] <- split(data[["RNA"]], f = data$donor_id)
 
 Preprocess pr. subset of the feature
 ```{r}
-#| echo: false
-#| message: false
+#| include: false
 
 data <- NormalizeData(data)
 data <- FindVariableFeatures(data)
@@ -35,7 +34,7 @@ data <- RunPCA(data,
 
 Integrate
 ```{r}
-#| warnings: false
+#| include: false
 
 #To speed up the following process, we will work in parallel
 plan("multisession", workers = 4) # Do not change it, or it might crash.
