@@ -362,7 +362,7 @@ ggplot(top_bottom_10, aes(reorder(pathway, NES), NES)) +
   geom_col(aes(fill=padj<0.05)) +
   coord_flip() +
   labs(x="Pathway", y="Normalized Enrichment Score",
-       title="Top 10 and Bottom 10 Hallmark pathways based on Absolute NES from GSEA") + 
+       title="Top 10 and Bottom 10\nHallmark pathways based\non Absolute NES\nfrom GSEA") + 
   theme_minimal()
 ```
 
