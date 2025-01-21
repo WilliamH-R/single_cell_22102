@@ -15,17 +15,18 @@ filtered_data <- readRDS("../data/filtered_data.rds")
 # Find doublets
 ```{r}
 #Convert your seurat object to a sce object
-sce <- scDblFinder(GetAssayData(filtered_data, slot="counts"), samples = filtered_data@meta.data$donor_id, clusters=Idents(filtered_data))
-
-
 set.seed(10010101)
+sce <- as.SingleCellExperiment(filtered_data)
+sce <- scDblFinder(sce,
+                   samples = "donor_id",
+                   clusters = colLabels(sce))
 
-plotUMAP(sce.dbl,
+plotUMAP(sce,
          colour_by = "scDblFinder.score")
 
-table(sce.dbl$scDblFinder.class)
+table(sce$scDblFinder.class)
 
-plotColData(sce.dbl,
+plotColData(sce,
             x = "RNA_snn_res.0.7",
             y = "scDblFinder.score",
             colour_by = ("scDblFinder.class"))
@@ -33,7 +34,7 @@ plotColData(sce.dbl,
 
 # Subset to not include doublets
 ```{r}
-filtered_data <- sce.dbl |>
+filtered_data <- sce |>
   as.Seurat() |>
   subset(subset = scDblFinder.class == "singlet")
 ```
