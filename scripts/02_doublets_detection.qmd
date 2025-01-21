@@ -15,12 +15,10 @@ filtered_data <- readRDS("../data/filtered_data.rds")
 # Find doublets
 ```{r}
 #Convert your seurat object to a sce object
-sce <- as.SingleCellExperiment(filtered_data)
+sce <- scDblFinder(GetAssayData(filtered_data, slot="counts"), samples = filtered_data@meta.data$donor_id, clusters=Idents(filtered_data))
+
 
 set.seed(10010101)
-sce.dbl <- scDblFinder(sce,
-                       samples = "donor_id",
-                       clusters = colLabels(sce))
 
 plotUMAP(sce.dbl,
          colour_by = "scDblFinder.score")
@@ -28,7 +26,7 @@ plotUMAP(sce.dbl,
 table(sce.dbl$scDblFinder.class)
 
 plotColData(sce.dbl,
-            x = "RNA_snn_res.0.3",
+            x = "RNA_snn_res.0.7",
             y = "scDblFinder.score",
             colour_by = ("scDblFinder.class"))
 ```
