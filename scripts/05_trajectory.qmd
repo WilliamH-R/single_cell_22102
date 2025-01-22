@@ -1,0 +1,436 @@
+# Imports
+```{r}
+suppressPackageStartupMessages({
+  library(slingshot)
+  library(Seurat)
+  library(SingleCellExperiment)
+  library(tradeSeq)
+  library(dplyr)
+  library(patchwork)
+  library(ggplot2)
+})
+```
+
+# Load data
+```{r}
+data <- readRDS("../data/annotated_data.rds")
+```
+
+
+# Subset data
+```{r}
+# # Remove NA values in Clone
+# data <- data |>
+#   subset(subset = dtu_cell_type %in% c("Classical monocytes",
+#                                        "Non-classical monocytes") &
+#            Clone %in% c("Mutant", "Wildtype"))
+# data@meta.data$Clone <- droplevels(data@meta.data$Clone)
+
+data <- data |>
+  subset(subset = dtu_cell_type %in% c("Classical monocytes",
+                                       "Non-classical monocytes"))
+
+data@meta.data$dtu_cell_type <- droplevels(data@meta.data$dtu_cell_type)
+
+#remove reductions
+#data@reductions <- list()
+```
+
+# Find clusters
+```{r}
+#| include: false
+
+resolution <- c(0.05, 0.1, 0.2)
+
+data <- FindNeighbors(data,
+                      dims = 1:20)
+data <- FindClusters(data,
+                     resolution = resolution)
+data <- RunUMAP(data,
+                dims = 1:20,
+                reduction = "Harmony_Integration",
+                reduction.name = "umap_integration")
+```
+
+# Set idents
+Choose idents that gives xxx clusters (this is the number of cell types we expect to have). We use PCA reductions is this is what slingshot utilizes.
+```{r}
+for (res in resolution) {
+  p <- DimPlot(data,
+               reduction = "umap_integration",
+               group.by = glue::glue("RNA_snn_res.{res}"),
+               label = TRUE)
+  print(p)
+}
+
+# Show cell types and mutation
+DimPlot(data,
+        reduction = "umap_integration",
+        group.by = "dtu_cell_type",
+        label = TRUE)
+
+DimPlot(data,
+        reduction = "umap_integration",
+        group.by = "Clone",
+        label = TRUE)
+
+DimPlot(data,
+        reduction = "umap_integration",
+        group.by = "disease",
+        label = TRUE)
+
+DimPlot(data,
+        reduction = "umap_integration",
+        group.by = "MUTATION.GROUP",
+        label = TRUE)
+
+DimPlot(data,
+        reduction = "umap_integration",
+        group.by = "donor_id",
+        label = TRUE)
+```
+
+Set idents
+```{r}
+Idents(data) <- "RNA_snn_res.0.05"
+```
+
+# Work with ALL clusters
+## Run trajectory analysis
+```{r}
+pal <- c(RColorBrewer::brewer.pal(9, "Set1"),
+         RColorBrewer::brewer.pal(8, "Set2"))
+
+dimred <- data@reductions$pca@cell.embeddings
+clustering <- data$RNA_snn_res.0.05
+
+var_features<- VariableFeatures(data)
+counts<- as.matrix(data@assays$RNA$counts[var_features, ])
+
+set.seed(1)
+lineages <- getLineages(data = dimred,
+                        clusterLabels = clustering#,
+                        #start.clus = "1"
+                        )#define where to start the trajectories
+```
+
+Visualize
+```{r}
+# Plot the lineages
+par(mfrow = c(1, 2))
+
+plot(dimred[, 1:2],
+     col = pal[clustering],
+     cex = 0.7,
+     pch = 16)
+
+for (i in levels(clustering)) {
+    text(mean(dimred[clustering == i, 1]),
+         mean(dimred[clustering == i, 2]),
+         labels = i,
+         font = 2)
+}
+
+plot(dimred[, 1:2],
+     col = pal[clustering],
+     cex = 0.5,
+     pch = 16)
+
+lines(SlingshotDataSet(lineages),
+      lwd=2,
+      type = 'lineages',
+      col = c("black"))
+```
+
+## Differentially expressed genes between lineages
+```{r}
+# We will use 200 most variable, not 2000 to reduce time
+data <- FindVariableFeatures(data, nfeatures = 200)
+var_features <- VariableFeatures(data)
+
+# Subset the count matrix with these variable features
+counts <- as.matrix(data@assays$RNA$counts[var_features, ])
+
+curves <- getCurves(SlingshotDataSet(lineages),
+                    approx_points = 500,
+                    thresh = 0.01,
+                    stretch = 0.8,
+                    allow.breaks = TRUE,
+                    shrink = 0.99)
+
+set.seed(42)
+
+sce <- fitGAM(counts = as.matrix(counts),
+              sds = curves)
+```
+
+```{r}
+plotGeneCount(curves,
+              counts,
+              clusters = clustering,
+              models = sce)
+```
+Helper function for plotting a gene's differential expression
+```{r}
+plot_differential_expression <- function(feature_id) {
+  plots <- patchwork::wrap_plots(
+    plotGeneCount(curves,
+                  counts,
+                  clusters = clustering,
+                  models = sce,
+                  gene = feature_id),
+    plotSmoothers(sce,
+                  counts,
+                  gene = feature_id)
+  )
+  
+  # Add a common title with plot_annotation
+  plots + patchwork::plot_annotation(title = paste("Feature ID:", feature_id))
+}
+```
+
+
+```{r}
+different_end_association <- diffEndTest(sce)
+different_end_association$feature_id <- rownames(different_end_association)
+
+feature_id <- different_end_association |>
+  filter(pvalue < 0.05) |>
+  arrange(desc(waldStat)) |>
+  dplyr::slice_head(n = 10) |>
+  pull(feature_id)
+
+print(glue::glue("Top differential genes: {feature_id}"))
+
+plot_differential_expression("CSF2")
+```
+
+# Remove the cluster which is separate from the rest
+Subset
+```{r}
+data_subset <- data |>
+  subset(subset = RNA_snn_res.0.05 != "3")
+```
+
+## Run Seurat workflow
+```{r}
+#| include: false
+
+data_subset <- FindVariableFeatures(data_subset)
+data_subset <- ScaleData(data_subset)
+data_subset <- RunPCA(data_subset)
+```
+
+## Find dimensionality
+```{r}
+ElbowPlot(data_subset, n = 40)
+```
+
+## Find clusters
+```{r}
+#| include: false
+
+resolution <- c(0.05, 0.1, 0.2)
+
+data_subset <- FindNeighbors(data_subset,
+                             dims = 1:20)
+data_subset <- FindClusters(data_subset,
+                            resolution = resolution)
+
+data_subset <- RunUMAP(data_subset,
+                       dims = 1:20,
+                       reduction = "pca",
+                       reduction.name = "umap_subset")
+```
+
+
+Visualize
+```{r}
+for (res in resolution) {
+  p <- DimPlot(data_subset,
+               reduction = "pca",
+               group.by = glue::glue("RNA_snn_res.{res}"),
+               label = TRUE)
+  print(p)
+}
+
+# Show cell types and mutation
+DimPlot(data_subset,
+        reduction = "pca",
+        group.by = "dtu_cell_type",
+        label = TRUE)
+
+DimPlot(data_subset,
+        reduction = "pca",
+        group.by = "Clone",
+        label = TRUE)
+
+DimPlot(data_subset,
+        reduction = "pca",
+        group.by = "disease",
+        label = TRUE)
+
+DimPlot(data_subset,
+        reduction = "pca",
+        group.by = "MUTATION.GROUP",
+        label = TRUE)
+```
+
+Set idents
+```{r}
+Idents(data_subset) <- "RNA_snn_res.0.05"
+```
+
+## Run trajectory analysis
+```{r}
+dimred_subset <- data_subset@reductions$pca@cell.embeddings
+clustering_subset <- data_subset$RNA_snn_res.0.05
+
+var_features_subset <- VariableFeatures(data_subset)
+counts_subset <- as.matrix(data_subset@assays$RNA$counts[var_features_subset, ])
+
+set.seed(1)
+lineages_subset <- getLineages(data = dimred_subset,
+                               clusterLabels = clustering_subset#,
+                        #start.clus = "1"
+                        )#define where to start the trajectories
+```
+
+Visualize
+```{r}
+# Plot the lineages
+par(mfrow = c(1, 2))
+
+plot(dimred_subset[, 1:2],
+     col = pal[clustering_subset],
+     cex = 0.7,
+     pch = 16)
+
+for (i in levels(clustering_subset)) {
+    text(mean(dimred_subet[clustering_subset == i, 1]),
+         mean(dimred_subet[clustering_subset == i, 2]),
+         labels = i,
+         font = 2)
+}
+
+plot(dimred_subset[, 1:2],
+     col = pal[clustering_subset],
+     cex = 0.5,
+     pch = 16)
+
+lines(SlingshotDataSet(lineages_subset),
+      lwd=2,
+      type = 'lineages',
+      col = c("black"))
+```
+
+## Differentially expressed genes between lineages
+```{r}
+# We will use 200 most variable, not 2000 to reduce time
+data_subset <- FindVariableFeatures(data_subset, nfeatures = 200)
+var_features_subset <- VariableFeatures(data_subset)
+
+# Subset the count matrix with these variable features
+counts_subset <- as.matrix(data_subset@assays$RNA$counts[var_features_subset, ])
+
+curves_subset <- getCurves(SlingshotDataSet(lineages_subset),
+                           approx_points = 500,
+                           thresh = 0.01,
+                           stretch = 0.8,
+                           allow.breaks = TRUE,
+                           shrink = 0.99)
+
+set.seed(42)
+
+sce_subset <- fitGAM(counts = as.matrix(counts_subset),
+                     sds = curves_subset)
+```
+
+```{r}
+plotGeneCount(curves_subset,
+              counts_subset,
+              clusters = clustering_subset,
+              models = sce_subset)
+```
+
+Helper function for plotting a gene's differential expression
+```{r}
+plot_differential_expression_subset <- function(feature_id_subset) {
+  plots_subset <- patchwork::wrap_plots(
+    plotGeneCount(curves_subset,
+                  counts_subset,
+                  clusters = clustering_subset,
+                  models = sce_subset,
+                  gene = feature_id_subset),
+    plotSmoothers(sce_subset,
+                  counts_subset,
+                  gene = feature_id_subset)
+  )
+  
+  # Add a common title with plot_annotation
+  plots_subset + patchwork::plot_annotation(title = paste("Feature ID:",
+                                                          feature_id_subset))
+}
+```
+
+```{r}
+different_end_association_subset <- diffEndTest(sce_subset)
+different_end_association_subset$feature_id <- rownames(different_end_association_subset)
+
+feature_id_subset <- different_end_association_subset |>
+  filter(pvalue < 0.05) |>
+  arrange(desc(waldStat)) |>
+  dplyr::slice_head(n = 10) |>
+  pull(feature_id)
+
+print(glue::glue("Top differential genes: {feature_id_subset}"))
+
+plot_differential_expression_subset("CCL3")
+```
+
+
+
+```{r}
+for (res in resolution) {
+  p <- DimPlot(data,
+               reduction = "umap",
+               group.by = glue::glue("RNA_snn_res.{res}"),
+               label = TRUE)
+  print(p)
+}
+
+data[["MUTATION.GROUP_Clone"]] <- paste(data@meta.data$Clone,
+                                               data@meta.data$MUTATION.GROUP,
+                                               sep = "_")
+
+# Show cell types and mutation
+DimPlot(data,
+        reduction = "umap",
+        group.by = "dtu_cell_type",
+        label = TRUE)
+
+DimPlot(data,
+        reduction = "umap",
+        group.by = "Clone",
+        label = TRUE)
+
+DimPlot(data,
+        reduction = "umap",
+        group.by = "disease",
+        label = TRUE)
+
+DimPlot(data,
+        reduction = "umap",
+        group.by = "MUTATION.GROUP",
+        label = TRUE)
+
+DimPlot(data,
+        reduction = "umap",
+        group.by = c("MUTATION.GROUP_Clone"),
+        label = TRUE)
+
+DimPlot(data,
+        reduction = "umap",
+        group.by = c("donor_id"),
+        label = TRUE)
+```
