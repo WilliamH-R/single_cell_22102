@@ -4,8 +4,6 @@ format: html
 editor: visual
 ---
 
-
-
 ```{r}
 suppressPackageStartupMessages({
 library(DCATS)
@@ -22,7 +20,6 @@ library(tibble)
 library(tidyverse)
 })
 ```
-
 
 ```{r}
 pbmc.MTB <- readRDS("data/annotated_data.rds")
@@ -51,6 +48,7 @@ pbmc.MTB$case_control_id <- paste0(pbmc.MTB$case_control, pbmc.MTB$orig.ident)
 count_mat = table(pbmc.MTB$case_control_id, pbmc.MTB$scType_celltype)
 count_mat
 ```
+
 ```{r}
 # Calculate the similarity matrix using the KNN graph
 knn_mat <- knn_simMat(
@@ -86,13 +84,13 @@ dcats_results <- dcats_GLM(
 # Extract and inspect results
 dcats_results$fdr
 ```
+
 ```{r}
 # rowSums(count_mat)  # Summarize counts for each cell type
 # colSums(count_mat)  # Summarize counts for each condition
 # table(design_mat$condition)
 
 ```
-
 
 ```{r}
 
@@ -105,7 +103,9 @@ ggplot(fdr_df, aes(x = reorder(cell_type, condition), y = condition)) +
   labs(title = "DCATS FDR Results", x = "Cell Type", y = "FDR")
 
 ```
+
 # Differential Expression Analysis
+
 Focus on significant cell types identified by DCATS for pseudo-bulk differential expression.
 
 ```{r}
@@ -150,23 +150,26 @@ colData <- colData %>%
   rownames_to_column(var = "donor")
 ```
 
-
 ### Subset the Count Matrix for a Specific Cell Type
+
 ```{r}
 # Create DESeq2 object   
 dds <- DESeqDataSetFromMatrix(countData = counts_monocytes,
                               colData = colData,
                               design = ~ condition)
 ```
+
 . Remove rows (genes) that have fewer than 10 reads from dds.
 
 # filter
+
 ```{r}
 keep <- rowSums(counts(dds)) >=10
 dds <- dds[keep,]
 ```
 
 Looking at the PCA from the vst transformed data
+
 ```{r}
 vst <- vst(dds, blind = T)
 
@@ -199,20 +202,21 @@ ggplot(data = pca_data,
 
 ```
 
-In advance to runningn the DESeq2 function we are setting the colData levels, so that the control (HD) samples are the reference samples 
+In advance to runningn the DESeq2 function we are setting the colData levels, so that the control (HD) samples are the reference samples
+
 ```{r}
 colData$condition <- factor(colData$condition, levels = c("control", "case"))
 ```
 
-
 ```{r}
 dds <- DESeq(dds)
 ```
+
 Checking the contrasts
+
 ```{r}
 resultsNames(dds)
 ```
-
 
 ```{r}
 # Generate results object
@@ -234,16 +238,16 @@ res_tbl |> arrange(-log2FoldChange)
 View(res_tbl)
 ```
 
-Manually we find that TRBV8 gene has the highest log2FC meaning that this gene should be upregulated by cases (CHIP). 
-We check this with the `plotCounts` function.
+Manually we find that TRBV8 gene has the highest log2FC meaning that this gene should be upregulated by cases (CHIP). We check this with the `plotCounts` function.
+
 ```{r}
 plotCounts(dds = dds, gene = "TRBV28")
 ```
-And find that cases (CHIP) have higher expression of TRBV28.
-This doesn't make any sense, as TRBV28 is a part of the T-cell receptor and we have made a pseudobulk analysis of monocytes, which should not express TRBV28. 
-We find that only CHIP patients have expression. 
+
+And find that cases (CHIP) have higher expression of TRBV28. This doesn't make any sense, as TRBV28 is a part of the T-cell receptor and we have made a pseudobulk analysis of monocytes, which should not express TRBV28. We find that only CHIP patients have expression.
 
 ## Volcano plot of DE genes in monocytes
+
 ```{r}
 ggplot(data = res_tbl,
        mapping = aes(x = log2FoldChange, 
@@ -268,8 +272,6 @@ relevant_genes <- res_tbl |>
   filter(-log10(pvalue) > 2 & log2FoldChange > 3 | -log10(pvalue) > 2 & log2FoldChange < -3)
 ```
 
-
-
 ```{r}
 # Set thresholds
 padj_cutoff <- 0.99934
@@ -281,6 +283,7 @@ sig_res <- dplyr::filter(res_tbl, padj < padj_cutoff) %>%
 # Check significant genes output
 sig_res
 ```
+
 ```{r}
 ## Order results by padj values
 top20_sig_genes <- sig_res %>%
@@ -299,7 +302,6 @@ top20_sig_genes <- sig_res %>%
 # library(msigdb)
 ```
 
-
 ```{r}
 gsList <- readRDS("/home/projects/22102_single_cell/day5/gene_sets.Rds")
 res$genes <- rownames(res)
@@ -314,6 +316,7 @@ Entrez <- AnnotationDbi::select(org.Hs.eg.db,
                                     columns="ENTREZID",
                                     keytype="SYMBOL")
 ```
+
 ```{r}
 Entrez <- as_tibble(Entrez)
 res <- as.data.frame(res)
@@ -344,6 +347,7 @@ fgseaResTidy <- fgseaRes %>%
 ```{r}
 fgseaResTidy
 ```
+
 ```{r}
 # Sort the data frame based on NES in descending order to get top 10 pathways
 top_10 <- fgseaResTidy %>%
@@ -366,8 +370,8 @@ ggplot(top_bottom_10, aes(reorder(pathway, NES), NES)) +
   theme_minimal()
 ```
 
-
 # Cell-cell communication
+
 *Not checked by Morten*
 
 ```{r}
@@ -383,15 +387,18 @@ options(stringsAsFactors = FALSE)
 #Create a CellChat object
 cellchat <- createCellChat(object = pbmc.MTB, meta = pbmc.MTB@meta.data, group.by = "scType_celltype")
 ```
+
 ```{r}
 #Set interaction-ligand database
 CellChatDB <- CellChatDB.human 
 showDatabaseCategory(CellChatDB)
 ```
+
 ```{r}
 # Show the structure of the database
 dplyr::glimpse(CellChatDB$interaction)
 ```
+
 ```{r}
 # use a subset of CellChatDB for cell-cell communication analysis
 CellChatDB.use <- subsetDB(CellChatDB, search = "Secreted Signaling") # use Secreted Signaling
@@ -421,6 +428,7 @@ df.net <- subsetCommunication(cellchat) #returns a data frame consisting of all 
 #Infer the cell-cell communication at a signaling pathway level
 cellchat <- computeCommunProbPathway(cellchat)
 ```
+
 ```{r}
 #Calculate the aggregated cell-cell communication network
 cellchat <- aggregateNet(cellchat)
@@ -429,6 +437,7 @@ par(mfrow = c(1,2), xpd=TRUE)
 netVisual_circle(cellchat@net$count, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Number of interactions")
 netVisual_circle(cellchat@net$weight, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Interaction weights/strength")
 ```
+
 ```{r}
 pathways <- cellchat@netP$pathways
 
@@ -438,6 +447,7 @@ pathways.show <- c("TNF")
 par(mfrow=c(1,1))
 netVisual_aggregate(cellchat, signaling = pathways.show, layout = "circle")
 ```
+
 ```{r}
 # Heatmap
 par(mfrow=c(1,1))
