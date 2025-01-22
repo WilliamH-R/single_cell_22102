@@ -219,16 +219,6 @@ for (gene in mito_genes) {
 }
 ```
 
-## Calculate percent mitochondrial genes if found
-```{r}
-# raw_data[["mito_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
-#                                                        pattern = "^MT")
-
-# Or by a list of mitochondrial genes
-# raw_data[["mito_DTU"]] <- Seurat::PercentageFeatureSet(raw_data,
-#                                                        features = mito_genes)
-```
-
 # Do we have ribosomal genes?
 ```{r}
 ribo_genes <- stringr::str_extract(string = rownames(raw_data),
@@ -417,7 +407,7 @@ See if we observe some clear batch effects or other interesting stuff.
 ```{r}
 views <- c("CHIP", "ProjectID", "MUTATION.GROUP", "LANE", "Clone",
            "disease", "sex", "self_reported_ethnicity",
-           "development_stage")
+           "development_stage", "donor_id", "donor_disease")
 
 for (view in views) {
   p <- DimPlot(raw_data,
@@ -436,10 +426,15 @@ contingency_table <- table(raw_data$donor_disease,
   as.data.frame()
 colnames(contingency_table) <- c("DonorID", "Cluster", "Count")
 
+# Scale data pr. Donor
+contingency_table <- contingency_table |>
+  group_by(DonorID) |>
+  mutate(Count_scaled = Count / sum(Count))
+
 
 ggplot(contingency_table, aes(x = Cluster,
                               y = DonorID,
-                              fill = Count)) +
+                              fill = Count_scaled)) +
   geom_tile() +
   scale_fill_viridis_c(option = "D") + # Option "D" is one of the default viridis color maps
   theme_minimal() +
