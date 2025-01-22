@@ -883,6 +883,28 @@ ggplot(data = gsea_bound,
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Reperforming DGE analysis and GSEA with data where the non-paired WT cells have been removed. 
+
 So we have to remove the non-paired samples from each seurat object with TET2 and DNMT3A groupings.
 
 # Constructing new Seurat objects with only paired samples
