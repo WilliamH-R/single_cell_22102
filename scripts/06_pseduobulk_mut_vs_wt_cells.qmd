@@ -640,7 +640,7 @@ Doing the DESeq2
 ```{r}
 dds <- DESeqDataSetFromMatrix(countData = mono_counts, 
                                     colData = colData, 
-                                    design = ~ donor_id + condition)
+                                    design = ~ condition)
 ```
 
 We perform pre-filtering

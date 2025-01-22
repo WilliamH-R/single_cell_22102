@@ -313,12 +313,37 @@ meta_data <- raw_data@meta.data
 
 Plotting features and counts vs mitochondrial genes
 ```{r}
-ggplot(data = meta_data,
+plot_mt <- ggplot(data = meta_data,
        mapping = aes(x = nCount_RNA, 
                      y = nFeature_RNA,
                      color = percent.mt)) + 
-  geom_point(alpha = 0.3)
+  geom_point(alpha = 0.3) + 
+  scale_color_viridis() + 
+  labs(color = "% mitochondrial genes") +
+  theme_dark()
+plot_mt
 
+
+
+plot_hb <- ggplot(data = meta_data,
+       mapping = aes(x = nCount_RNA, 
+                     y = nFeature_RNA,
+                     color = hemo_DTU)) + 
+  geom_point(alpha = 0.5) + 
+  scale_color_viridis() + 
+  labs(color = "% hemoglobin genes") +
+  theme_dark()
+
+plot_ribo <- ggplot(data = meta_data,
+       mapping = aes(x = nCount_RNA, 
+                     y = nFeature_RNA,
+                     color = ribo_DTU)) + 
+  geom_point(alpha = 0.1) + 
+  scale_color_viridis() + 
+  labs(color = "% ribosomal genes") +
+  theme_dark()
+
+plot_mt / plot_hb + plot_ribo
 
 ```
 
