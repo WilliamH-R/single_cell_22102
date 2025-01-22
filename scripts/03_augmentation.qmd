@@ -15,6 +15,14 @@ suppressPackageStartupMessages({
 data <- readRDS("../data/filtered_no_doublets_data.rds")
 ```
 
+# Add a new meta data variable
+```{r}
+data[["MUTATION.GROUP_Clone"]] <- paste(data@meta.data$Clone,
+                                        data@meta.data$MUTATION.GROUP,
+                                        sep = "_")
+```
+
+
 # Integration
 Split by problematic feature.
 ```{r}
@@ -116,12 +124,12 @@ p1 <- DimPlot(data,
               reduction = 'UMAP',
               group.by = 'donor_id') +
   ggtitle("UMAP data")
-p3 <- DimPlot(data,
+p2 <- DimPlot(data,
               reduction = "umap_harmony",
               group.by = "donor_id") +
   ggtitle("UMAP Harmony")
 
-wrap_plots(p1, p3, nrow = 1) +
+wrap_plots(p1, p2, nrow = 1) +
   plot_layout(guides = "collect")
 ```
 
@@ -169,36 +177,10 @@ ggplot(contingency_table, aes(x = Cluster,
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-See Tileplot again
-```{r}
-# Assuming your data variables are defined as in the example
-contingency_table <- table(data$donor_disease,
-                           data@meta.data$scType_celltype) |>
-  as.data.frame()
-colnames(contingency_table) <- c("DonorID", "Cluster", "Count")
-
-# Scale data pr. Donor
-contingency_table <- contingency_table |>
-  group_by(DonorID) |>
-  mutate(Count_scaled = Count / sum(Count))
-
-ggplot(contingency_table, aes(x = Cluster,
-                              y = DonorID,
-                              fill = Count_scaled)) +
-  geom_tile() +
-  scale_fill_viridis_c(option = "D") + # Option "D" is one of the default viridis color maps
-  theme_minimal() +
-  labs(title = "Tileplot of Donor ID and Cluster",
-       x = "Cluster",
-       y = "Donor ID",
-       fill = "Count") +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1))
-```
-
 ```{r}
 views <- c("CHIP", "ProjectID", "MUTATION.GROUP", "LANE", "Clone",
            "disease", "sex", "self_reported_ethnicity",
-           "development_stage")
+           "development_stage", "donor_id", "donor_disease", "MUTATION.GROUP_Clone")
 
 for (view in views) {
   p <- DimPlot(data,

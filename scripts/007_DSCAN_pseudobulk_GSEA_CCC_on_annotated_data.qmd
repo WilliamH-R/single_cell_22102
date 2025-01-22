@@ -10,7 +10,7 @@ library(DCATS)
 library(Seurat)
 library(SeuratData)
 library(SingleCellExperiment)
-library(clusterProfiler)
+#library(clusterProfiler)
 library(dplyr)
 library(enrichplot)
 library(fgsea)
@@ -22,7 +22,7 @@ library(tidyverse)
 ```
 
 ```{r}
-pbmc.MTB <- readRDS("data/annotated_data.rds")
+pbmc.MTB <- readRDS("../data/annotated_data.rds")
 ```
 
 ```{r}
@@ -34,18 +34,18 @@ pbmc.MTB[["case_control"]] <- pbmc.MTB@meta.data$CHIP
 pbmc.MTB$case_control <- as.character(pbmc.MTB$case_control)
 
 # Modify the case_control levels
-pbmc.MTB$case_control[pbmc.MTB$case_control == 'control'] <- 'control'
-pbmc.MTB$case_control[pbmc.MTB$case_control == 'chip'] <- 'case'
+pbmc.MTB$case_control[pbmc.MTB$case_control == "control"] <- "control"
+pbmc.MTB$case_control[pbmc.MTB$case_control == "chip"] <- "case"
 # View(pbmc.MTB)
 # Optionally, convert CHIP back to a factor
 pbmc.MTB$case_control <- factor(pbmc.MTB$case_control, levels = c("control", "case"))
 
 # Add id to condition
-pbmc.MTB$case_control_id <- paste0(pbmc.MTB$case_control, pbmc.MTB$orig.ident)
+pbmc.MTB$case_control_id <- paste0(pbmc.MTB$case_control, pbmc.MTB$donor_id)
 ```
 
 ```{r}
-count_mat = table(pbmc.MTB$case_control_id, pbmc.MTB$scType_celltype)
+count_mat = table(pbmc.MTB$case_control_id, pbmc.MTB$dtu_cell_type)
 count_mat
 ```
 
@@ -53,7 +53,7 @@ count_mat
 # Calculate the similarity matrix using the KNN graph
 knn_mat <- knn_simMat(
   pbmc.MTB@graphs$RNA_snn,  # Use Seurat's SNN graph
-  pbmc.MTB$scType_celltype  # Specify the cell types
+  pbmc.MTB$dtu_cell_type    # Specify the cell types
 )
 
 dim(knn_mat)
@@ -67,7 +67,7 @@ design_mat <- data.frame(
 )
 
 rownames(design_mat) <- rownames(count_mat)
-# design_mat
+design_mat
 ```
 
 ```{r}
@@ -93,7 +93,6 @@ dcats_results$fdr
 ```
 
 ```{r}
-
 # Visualize the FDR results (Optional)
 fdr_df <- as.data.frame(dcats_results$fdr)
 fdr_df$cell_type <- rownames(fdr_df)
@@ -137,6 +136,7 @@ cts.split.modified <- lapply(cts.split, function(x){
 })
 ```
 
+### Subset the Count Matrix for a Specific Cell Type
 ```{r}
 counts_monocytes <- cts.split.modified$`Classical monocytes`
 ```
@@ -145,13 +145,14 @@ counts_monocytes <- cts.split.modified$`Classical monocytes`
 colData <- data.frame(samples = colnames(counts_monocytes))
 
 colData <- colData %>%
-  dplyr::mutate(condition = ifelse(grepl('case', samples), 'case', 'control')) %>%
+  dplyr::mutate(condition = ifelse(grepl('case', samples), 'case', 'control')) |>
   column_to_rownames(var = 'samples') |> 
   rownames_to_column(var = "donor")
+
+colData$condition <- factor(colData$condition, levels = c("control", "case"))
 ```
 
-### Subset the Count Matrix for a Specific Cell Type
-
+### Run DESeq2
 ```{r}
 # Create DESeq2 object   
 dds <- DESeqDataSetFromMatrix(countData = counts_monocytes,
@@ -159,36 +160,27 @@ dds <- DESeqDataSetFromMatrix(countData = counts_monocytes,
                               design = ~ condition)
 ```
 
-. Remove rows (genes) that have fewer than 10 reads from dds.
-
-# filter
-
+### Filter
+Remove rows (genes) that have fewer than 10 reads from dds.
 ```{r}
-keep <- rowSums(counts(dds)) >=10
+keep <- rowSums(counts(dds)) >= 10
 dds <- dds[keep,]
 ```
 
 Looking at the PCA from the vst transformed data
-
 ```{r}
-vst <- vst(dds, blind = T)
+vst <- vst(dds,
+           blind = TRUE)
 
 pca_data <- plotPCA(vst)
 
 pca_data <- pca_data$data |> 
-  as.data.frame() 
-
-pca_data$group
-
-pca_data <- pca_data |> 
-  dplyr::rename(Disease = group) 
-
-pca_data <- pca_data |>
+  as.data.frame() |>
+  dplyr::rename(Disease = group) |>
   mutate(Disease = case_when(Disease == "case" ~ "CHIP", 
                              Disease == "control" ~ "Healthy donor"))
 
 plotPCA(vst)
-
 
 ggplot(data = pca_data, 
        mapping = aes(x = PC1, 
@@ -196,16 +188,10 @@ ggplot(data = pca_data,
                      color = Disease)) + 
          geom_point(size = 3) + 
          scale_color_viridis_d() + 
-  labs(x = "PC1 (41%)",
-       y = "PC2 (34%)")
+  labs(x = "PC1 (40%)",
+       y = "PC2 (35%)") +
   theme_bw()
 
-```
-
-In advance to runningn the DESeq2 function we are setting the colData levels, so that the control (HD) samples are the reference samples
-
-```{r}
-colData$condition <- factor(colData$condition, levels = c("control", "case"))
 ```
 
 ```{r}
@@ -220,7 +206,9 @@ resultsNames(dds)
 
 ```{r}
 # Generate results object
-res <- results(dds)
+res <- results(dds,
+               name = "condition_case_vs_control",
+               alpha = 0.05)
 
 summary(res)
 ```
@@ -233,9 +221,11 @@ res_tbl <- res %>%
   as_tibble() %>%
   arrange(padj)
 
+res_tbl
+
 # Check results output
-res_tbl |> arrange(-log2FoldChange)
-View(res_tbl)
+res_tbl |>
+  arrange(desc(abs(log2FoldChange)))
 ```
 
 Manually we find that TRBV8 gene has the highest log2FC meaning that this gene should be upregulated by cases (CHIP). We check this with the `plotCounts` function.
@@ -249,6 +239,9 @@ And find that cases (CHIP) have higher expression of TRBV28. This doesn't make a
 ## Volcano plot of DE genes in monocytes
 
 ```{r}
+relevant_genes <- res_tbl |> 
+  filter(-log10(pvalue) > 2 & log2FoldChange > 3 | -log10(pvalue) > 2 & log2FoldChange < -3)
+
 ggplot(data = res_tbl,
        mapping = aes(x = log2FoldChange, 
                      y = -log10(pvalue))) + 
@@ -267,9 +260,6 @@ ggplot(data = res_tbl,
        subtitle = "Highlighted genes have log2FC > 3 or < -3 and p-value < 0.01") + 
   theme(plot.title = element_text(hjust = 0.5),
         plot.subtitle = element_text(hjust = 0.5))
-
-relevant_genes <- res_tbl |> 
-  filter(-log10(pvalue) > 2 & log2FoldChange > 3 | -log10(pvalue) > 2 & log2FoldChange < -3)
 ```
 
 ```{r}
@@ -298,32 +288,36 @@ top20_sig_genes <- sig_res %>%
   head(n=20)
 ```
 
+# fGSEA
 ```{r}
-# library(msigdb)
+library(msigdb)
 ```
 
 ```{r}
-gsList <- readRDS("/home/projects/22102_single_cell/day5/gene_sets.Rds")
+gsList <- readRDS("../data/gene_sets.Rds")
 res$genes <- rownames(res)
+
 #Add EntrezID for the genes
 library(org.Hs.eg.db)
-
 ```
 
 ```{r}
 Entrez <- AnnotationDbi::select(org.Hs.eg.db,
-                                    key=res$genes, 
-                                    columns="ENTREZID",
-                                    keytype="SYMBOL")
+                                key = res$genes, 
+                                columns = "ENTREZID",
+                                keytype = "SYMBOL")
 ```
 
 ```{r}
 Entrez <- as_tibble(Entrez)
 res <- as.data.frame(res)
-res <- inner_join(res, Entrez, by=c("genes"="SYMBOL"))
+res <- inner_join(res,
+                  Entrez,
+                  by = c("genes" = "SYMBOL"))
+
 #Remove those genes that do not have an entrezid
 res <- filter(res, !is.na(ENTREZID))
-gene_list  <- gene_list[!is.na(names(gene_list))]
+# gene_list  <- gene_list[!is.na(names(gene_list))]
 ```
 
 ```{r}
@@ -336,7 +330,8 @@ head(rankData)
 
 ```{r}
 #Running fgsea algorithm:
-fgseaRes <- fgsea(pathways=gsList, stats=na.omit(rankData))
+fgseaRes <- fgsea(pathways = gsList,
+                  stats = na.omit(rankData))
 
 #Tidy the results
 fgseaResTidy <- fgseaRes %>%
@@ -372,8 +367,6 @@ ggplot(top_bottom_10, aes(reorder(pathway, NES), NES)) +
 
 # Cell-cell communication
 
-*Not checked by Morten*
-
 ```{r}
 suppressPackageStartupMessages({
 library(CellChat)
@@ -385,7 +378,9 @@ options(stringsAsFactors = FALSE)
 
 ```{r}
 #Create a CellChat object
-cellchat <- createCellChat(object = pbmc.MTB, meta = pbmc.MTB@meta.data, group.by = "scType_celltype")
+cellchat <- createCellChat(object = pbmc.MTB,
+                           meta = pbmc.MTB@meta.data,
+                           group.by = "dtu_cell_type")
 ```
 
 ```{r}

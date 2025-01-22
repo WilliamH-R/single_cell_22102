@@ -34,7 +34,7 @@ By eyeballing we find that the clustering of resolution 0.5 is way to high - i.e
 Setting `Idents()` to i.0.3
 
 ```{r}
-Idents(obj) <- "i.1.1"
+Idents(obj) <- "i.0.3"
 ```
 
 ## Identification of differentialle expressed genes across clusters
@@ -44,10 +44,11 @@ Idents(obj) <- "i.1.1"
 Cluster 0
 
 ```{r}
-FindConservedMarkers(object = obj, ident.1 = 0,
-                                            assay = "RNA",
-                                            grouping.var = "disease",
-                                            min.cells.group = 0.9)
+FindConservedMarkers(object = obj,
+                     ident.1 = 0,
+                     assay = "RNA",
+                     grouping.var = "disease",
+                     min.cells.group = 0.9)
 ```
 
 So based on this there is no question that cluster 0 is a T-cell cluster as both LTB (lymphotoxin beta) and IL7R (CD127) which are very specific to T-cells are overexpressed.
@@ -230,27 +231,28 @@ Setting the cell identities and setting the cell identities to the column "dtu_c
 Idents(obj) <- "i.0.3"
 
 obj <- RenameIdents(object = obj, 
-                                "0" = "CD4+ T cells",
-                                "1" = "CD8+ T cells",
-                                "2" = "Classical monocytes",
-                                "3" = "NK cells",
-                                "4" = "B cells",
-                                "5" = "NKT cells?",
-                                "6" = "Non-classical monocytes",
-                                "7" = "Platelets",
-                                "8" = "DC")
+                    "0" = "CD4+ T cells",
+                    "1" = "CD8+ T cells",
+                    "2" = "Classical monocytes",
+                    "3" = "NK cells",
+                    "4" = "B cells",
+                    "5" = "NKT cells?",
+                    "6" = "Non-classical monocytes",
+                    "7" = "Platelets",
+                    "8" = "DC")
 
 
 ## Adding the cell IDs to the metadata as a new column - is named cell_type_manual
 obj[["dtu_cell_type"]] <- Idents(object = obj)
-
-
 ```
 
 Checking in UMAP
 
 ```{r}
-DimPlot(object = obj, reduction = "umap_harmony", label = T, group.by = "dtu_cell_type")
+DimPlot(object = obj,
+        reduction = "umap_harmony",
+        label = TRUE,
+        group.by = "dtu_cell_type")
 ```
 
 Saving file with annotated clusters
