@@ -1,8 +1,13 @@
 ---
 title: "04_cell_type_annotations"
 format: html
-editor: visual
+editor: source
 ---
+
+# Set seed
+```{r}
+set.seed(5369553)
+```
 
 ### Loading libraries and data
 

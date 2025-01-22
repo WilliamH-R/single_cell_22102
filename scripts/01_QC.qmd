@@ -1,3 +1,9 @@
+# Set seed
+```{r}
+set.seed(5369553)
+```
+
+
 # Imports
 ```{r}
 library(Seurat)

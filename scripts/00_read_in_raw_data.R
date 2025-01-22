@@ -8,6 +8,7 @@
 
 library(Seurat)
 
+set.seed(5369553)
 
 ### Acquiring data from Jakob
 ### Jakob downloaded the data from https://cellxgene.cziscience.com/collections/0aab20b3-c30c-4606-bd2e-d20dae739c45
