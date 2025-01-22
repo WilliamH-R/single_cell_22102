@@ -6,7 +6,7 @@ editor: visual
 
 *Purpose of script:* In the data we have annotated whether the cell is mutant or not and we want to ascertain whether this impacts the gene expression of the cells. The hypothesis is that especially the monocytes have a different gene expression as these cells are affected by the CHIP-mutations.
 
-## Loading data and libraries
+Loading data and libraries
 
 ```{r}
 library(Seurat)
@@ -19,6 +19,8 @@ library(stringr)
 
 obj <- readRDS(file = "../data/annotated_data.rds")
 ```
+
+# Exploratory data analysis
 
 Exploring the data by looking at the metadata
 
@@ -234,6 +236,8 @@ table(obj_tet2@meta.data$Clone_group, obj_tet2@meta.data$dtu_cell_type)
 
 *So now we can perform DGE analysis on both TET2 mutants and DNMT3A mutants vs. wildtypes*
 
+# Differential gene expression analysis
+
 ## TET2 analysis
 
 Preparing the data
@@ -299,6 +303,18 @@ colData <- str_remove(string = sample_ids, pattern = "^(.*?)(?=Mutant|Wildtype)"
 base::colnames(colData) <- "condition"
 ```
 
+We also want the donor IDs, so we can include the donors in the colData. We get the donor names from the sample IDs
+```{r}
+donor_id <- str_remove(string = sample_ids, pattern = "(Mutant|Wildtype)")
+donor_id
+
+colData$donor_id <- donor_id
+
+colData
+```
+
+
+
 ### Differential gene expression analysis using DESeq2
 
 First doing on monocytes as these are the most commonly mutated cells. Count data contained in `mono_counts` colData contained in `colData` The design is stratified in the `column` condition in `colData`.
@@ -308,7 +324,7 @@ Doing the DESeq2
 ```{r}
 dds <- DESeqDataSetFromMatrix(countData = mono_counts, 
                                     colData = colData, 
-                                    design = ~ condition)
+                                    design = ~ donor_id + condition)
 ```
 
 We perform pre-filtering
@@ -384,17 +400,492 @@ ggplot(data = pc_df,
   theme_bw() +
   labs(color = "Donor", 
        shape = "Mutational status",
-       x = "PC1 (79% variance)",
-       y = "PC2 (9% variance)") +
+       x = "PC1 (85% variance)",
+       y = "PC2 (11% variance)") +
   scale_color_viridis_d()
 
 ```
 
 Plot above shows that we should not have unpaired samples in the dataframe, as they are highly different in the PCA compared to the paired samples. So much variation in the data could be ascribed to between-donor variation and not due to the mutations in the cells.
 
+We perform the DGE analysis anyway.
+```{r}
+dds <- DESeq(dds)
+```
+
+Plotting dispersion estimates
+```{r}
+plotDispEsts(dds)
+```
+Getting results
+```{r}
+res <- results(dds, contrast=c("condition","Mutant","Wildtype"), alpha = 0.05)
+
+summary(res)
+```
+No DE genes. 
+
+Getting a dataframe with the results
+```{r}
+library(tibble)
+
+res_df <- res |> 
+  as.data.frame() |>
+  rownames_to_column(var = "gene")
+
+View(res_df)
+```
+
+Making Volcano plot on p-values (not p-adjusted though)
+```{r}
+ggplot(data = res_df, 
+       mapping = aes(x = log2FoldChange,
+                     y = -log10(pvalue))) + 
+  geom_point(alpha = 0.2) + 
+  geom_point(data = res_df |> 
+               filter(-log10(pvalue) > 1.303),
+             mapping = aes(x = log2FoldChange, 
+                                 y = -log10(pvalue),
+                                 label = gene, 
+                           color = "red")) +
+  geom_label_repel(data = res_df |> 
+                     filter(-log10(pvalue) > 1.303), 
+                     mapping = aes(x = log2FoldChange, 
+                                 y = -log10(pvalue),
+                                 label = gene)) +
+  theme_bw() +
+  labs(title = "Volcano plot of differentially expresssed genes by\nTET2mut vs. TET2wt monocytes",
+       subtitle = "Highlighted genes have p-value < 0.05") +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  theme(legend.position = "null")
+```
+
+### Gene set enrichment analysis
+Loading a gene list
+
+```{r}
+gs_list <- readRDS("/home/projects/22102_single_cell/day5/gene_sets.Rds")
+```
+
+```{r}
+res$genes <- rownames(res)
+
+#Add EntrezID for the genes
+library(org.Hs.eg.db)
+
+Entrez <- AnnotationDbi::select(org.Hs.eg.db,
+                                    key= res$genes, 
+                                    columns="ENTREZID",
+                                    keytype="SYMBOL")
+Entrez <- as_tibble(Entrez)
+dds_results <- as.data.frame(res)
+dds_results <- inner_join(dds_results, Entrez, by=c("genes"="SYMBOL"))
+#Remove those genes that do not have an entrezid
+dds_results <- filter(dds_results, !is.na(ENTREZID))
+```
+
+```{r}
+#Create new metric
+dds_results$stat_sig <- -log10(dds_results$pvalue) * sign(dds_results$log2FoldChange)
+rankData <- dds_results$stat_sig # Takes out the vector stat_sign with the calculated values
+names(rankData) <- dds_results$genes # Takes out the names of the genes in results and assigns it as names in the vector - THIS IS NEW. 
+head(rankData)
+```
+
+rankData contains non-finite numbers.
+
+```{r}
+sum(!is.finite(rankData))
+```
+
+In total 24 non-finites.
+
+We could remove these
+
+```{r}
+rankData <- rankData[is.finite(rankData)]
+```
+
+Running fgsea
+
+```{r}
+library(fgsea)
+gsea_df <- fgsea(pathways = gs_list, 
+      stats = rankData)
+
+View(gsea_df)
+```
+
+Taking bottom and top GSEA pathways
+
+```{r}
+gsea_top10 <- gsea_df |> 
+  as.data.frame() |> 
+  dplyr::arrange(desc(NES)) |> 
+  dplyr::top_n(n = 10, wt = NES)
+
+
+gsea_bottom10 <- gsea_df |> 
+  as.data.frame() |> 
+  dplyr::arrange(NES) |> 
+  head(10)
+
+gsea_bound <- rbind(gsea_bottom10, gsea_top10) |> 
+  mutate(sign = case_when(pval < 0.05 ~ "significant", 
+                          pval >  0.05 ~ "NS"))
+```
+
+Plotting
+
+```{r}
+library(forcats)
+
+ggplot(data = gsea_bound, 
+         mapping = aes(x = NES, 
+                     y = fct_reorder(pathway, NES),
+                     fill = sign)) +
+  geom_col() + 
+  labs(y = "Pathway",
+       title = "TET2mut monocytes:\nTop 10 most up- and \ndownregulated KEGG\npathways") +
+  scale_fill_viridis_d() + 
+  theme_bw() 
+```
+
+
+
+
+
+## DNMT3A analysis
+
+```{r}
+obj_dnmt3a$sample <- paste0(obj_dnmt3a$donor_id, obj_dnmt3a$Clone)
+
+
+# Aggregate counts to sample level
+counts <- AggregateExpression(obj_dnmt3a, 
+                              group.by = c("dtu_cell_type", "sample"),
+                              assays =  "RNA",
+                              return.seurat = FALSE)
+
+
+counts <- counts$RNA
+
+
+# transpose
+counts.t <- t(counts)
+
+# convert to data.frame
+counts.t <- as.data.frame(counts.t)
+
+
+# get values where to split
+splitRows <- gsub('_.*', '', rownames(counts.t))
+
+# split data.frame
+cts.split <- split.data.frame(counts.t,
+                              f = factor(splitRows))
+
+
+# fix colna"CD14+ Monocyte"# fix colnames and transpose
+cts.split.modified <- lapply(cts.split, function(x){
+    rownames(x) <- gsub('.*_(.*)', '\\1', rownames(x)) #whatever comes after the underscore in the row names will be retained in the final result.
+    t(x)
+})
+```
+
+Looking at the generated list
+
+```{r}
+head(cts.split.modified$`B cells`)
+```
+
+We need to make a column with metadata for DESeq2.
+
+Getting the count data for monocytes
+
+```{r}
+mono_counts <- cts.split.modified$`Classical monocytes`
+
+sample_ids <- colnames(mono_counts)
+```
+
+Removing pre-fixes on the colData to get the design.
+
+```{r}
+colData <- str_remove(string = sample_ids, pattern = "^(.*?)(?=Mutant|Wildtype)") |> 
+  as.data.frame()
+
+base::colnames(colData) <- "condition"
+```
+
+We also want the donor IDs, so we can include the donors in the colData. We get the donor names from the sample IDs
+```{r}
+donor_id <- str_remove(string = sample_ids, pattern = "(Mutant|Wildtype)")
+donor_id
+
+colData$donor_id <- donor_id
+
+colData
+```
+
+
+
+### Differential gene expression analysis
+
+First doing on monocytes as these are the most commonly mutated cells. Count data contained in `mono_counts` colData contained in `colData` The design is stratified in the `column` condition in `colData`.
+
+Doing the DESeq2
+
+```{r}
+dds <- DESeqDataSetFromMatrix(countData = mono_counts, 
+                                    colData = colData, 
+                                    design = ~ donor_id + condition)
+```
+
+We perform pre-filtering
+
+```{r}
+keep <- rowSums(counts(dds)) >= 10
+dds <- dds[keep,]
+```
+
+Making PCA on VST transformed data
+```{r}
+library(tidyr)
+library(ggrepel)
+
+### Using the VST transformation to get out VST data for the PCA
+vst <- vst(object = dds, 
+           blind = F)
+
+### Getting counts from the vst object
+transformed_data <- assay(vst)
+
+
+## Performing PC analysis on the data that were taken out from the vst object
+pc <- prcomp(t(transformed_data), scale. = T)
+
+## Getting loadings
+loadings <- pc |> 
+  broom::tidy("rotation") |> 
+  pivot_wider(names_from = "PC",
+              names_prefix = "PC", 
+              values_from = "value") |> 
+  arrange(desc(abs(PC1))) |> 
+  head(10)
+
+arrow_style <- arrow(
+  angle = 20, ends = "first", type = "closed", length = grid::unit(8, "pt")
+)
+
+ggplot(data = loadings, 
+       mapping = aes(x = PC1, 
+                     y = PC2)) +
+  geom_segment(xend = 0, yend = 0, arrow = arrow_style) + 
+  geom_label_repel(aes(label = column,
+                       max.overlaps = Inf, 
+                       force = 3)
+                   ) + 
+  theme_minimal() + 
+  labs(title = "Rotations")
+```
+
+
+
+
+```{r}
+pc_df <- plotPCA(vst)
+
+plotPCA(vst)
+
+pc_df <- pc_df$data |> 
+  as.data.frame()
+
+#Extracting donor names
+pc_df <- pc_df |> 
+  mutate(donor = str_remove(name, pattern = "(Wildtype|Mutant)$"))
+
+# Plotting
+ggplot(data = pc_df, 
+       mapping = aes(x = PC1, 
+                     y = PC2,
+                     color = donor,
+                     shape = group)) +
+  geom_point(size = 3) +
+  theme_bw() +
+  labs(color = "Donor", 
+       shape = "Mutational status",
+       x = "PC1 (82% variance)",
+       y = "PC2 (12% variance)") +
+  scale_color_viridis_d()
+
+```
+
+Plot above shows that we should not have unpaired samples in the dataframe, as they are highly different in the PCA compared to the paired samples. So much variation in the data could be ascribed to between-donor variation and not due to the mutations in the cells.
+
+We perform the DGE analysis anyway.
+```{r}
+dds <- DESeq(dds)
+```
+
+Plotting dispersion estimates
+```{r}
+plotDispEsts(dds)
+```
+Getting results
+```{r}
+res <- results(dds, contrast=c("condition","Mutant","Wildtype"), alpha = 0.05)
+
+summary(res)
+```
+No DE genes. 
+
+Getting a dataframe with the results
+```{r}
+library(tibble)
+
+res_df <- res |> 
+  as.data.frame() |>
+  rownames_to_column(var = "gene")
+
+View(res_df)
+```
+
+
+Making Volcano plot on p-values (not p-adjusted though)
+```{r}
+ggplot(data = res_df, 
+       mapping = aes(x = log2FoldChange,
+                     y = -log10(pvalue))) + 
+  geom_point(alpha = 0.2) + 
+  geom_point(data = res_df |> 
+               filter(-log10(pvalue) > 1.303),
+             mapping = aes(x = log2FoldChange, 
+                                 y = -log10(pvalue),
+                                 label = gene, 
+                           color = "red")) +
+  geom_label_repel(data = res_df |> 
+                     filter(-log10(pvalue) > 1.303), 
+                     mapping = aes(x = log2FoldChange, 
+                                 y = -log10(pvalue),
+                                 label = gene)) +
+  theme_bw() +
+  labs(title = "Volcano plot of differentially expresssed genes by\nDNMT3Amut vs. DNMT3Awt monocytes",
+       subtitle = "Highlighted genes have p-value < 0.05") +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  theme(legend.position = "null")
+```
+
+### Gene set enrichment analysis
+
+Loading a gene list
+
+```{r}
+gs_list <- readRDS("/home/projects/22102_single_cell/day5/gene_sets.Rds")
+```
+
+```{r}
+res$genes <- rownames(res)
+
+#Add EntrezID for the genes
+library(org.Hs.eg.db)
+
+Entrez <- AnnotationDbi::select(org.Hs.eg.db,
+                                    key= res$genes, 
+                                    columns="ENTREZID",
+                                    keytype="SYMBOL")
+Entrez <- as_tibble(Entrez)
+dds_results <- as.data.frame(res)
+dds_results <- inner_join(dds_results, Entrez, by=c("genes"="SYMBOL"))
+#Remove those genes that do not have an entrezid
+dds_results <- filter(dds_results, !is.na(ENTREZID))
+```
+
+```{r}
+#Create new metric
+dds_results$stat_sig <- -log10(dds_results$pvalue) * sign(dds_results$log2FoldChange)
+rankData <- dds_results$stat_sig # Takes out the vector stat_sign with the calculated values
+names(rankData) <- dds_results$genes # Takes out the names of the genes in results and assigns it as names in the vector - THIS IS NEW. 
+head(rankData)
+```
+
+rankData contains non-finite numbers.
+
+```{r}
+sum(!is.finite(rankData))
+```
+
+In total 24 non-finites.
+
+We could remove these
+
+```{r}
+rankData <- rankData[is.finite(rankData)]
+```
+
+Running fgsea
+
+```{r}
+library(fgsea)
+gsea_df <- fgsea(pathways = gs_list, 
+      stats = rankData)
+
+#View(gsea_df)
+```
+
+Taking bottom and top GSEA pathways
+
+```{r}
+gsea_top10 <- gsea_df |> 
+  as.data.frame() |> 
+  dplyr::arrange(desc(NES)) |> 
+  dplyr::top_n(n = 10, wt = NES)
+
+
+gsea_bottom10 <- gsea_df |> 
+  as.data.frame() |> 
+  dplyr::arrange(NES) |> 
+  head(10)
+
+gsea_bound <- rbind(gsea_bottom10, gsea_top10) |> 
+  mutate(sign = case_when(pval < 0.05 ~ "significant", 
+                          pval >  0.05 ~ "NS"))
+```
+
+Plotting
+
+```{r}
+library(forcats)
+
+ggplot(data = gsea_bound, 
+         mapping = aes(x = NES, 
+                     y = fct_reorder(pathway, NES),
+                     fill = sign)) +
+  geom_col() + 
+  labs(y = "Pathway",
+       title = "TET2mut monocytes:\nTop 10 most up- and \ndownregulated KEGG\npathways") +
+  scale_fill_viridis_d() + 
+  theme_bw() 
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 So we have to remove the non-paired samples from each seurat object with TET2 and DNMT3A groupings.
 
-### Constructing new Seurat objects with only paired samples
+# Constructing new Seurat objects with only paired samples
 
 We first identify which donors belong to which mutation
 
@@ -487,13 +978,17 @@ colData <- str_remove(string = sample_ids, pattern = "^(.*?)(?=Mutant|Wildtype)"
   as.data.frame()
 
 base::colnames(colData) <- "condition"
+
+colData$donor <- c("014", "014", "033", "033")
+
+
 ```
 
 Establish DESeq2 object on TET2mut vs. TET2wt monocytes
 ```{r}
 dds <- DESeqDataSetFromMatrix(countData = mono_counts,
                               colData = colData,
-                              design = ~ condition)
+                              design = ~ donor + condition)
 ```
 Excluding genes with <10 counts per gene
 ```{r}
@@ -529,8 +1024,8 @@ ggplot(data = pc_df,
   theme_bw() +
   labs(color = "Donor", 
        shape = "Mutational status",
-       x = "PC1 (79% variance)",
-       y = "PC2 (9% variance)") +
+       x = "PC1 (93% variance)",
+       y = "PC2 (4% variance)") +
   scale_color_viridis_d()
 ```
 
@@ -754,13 +1249,15 @@ colData <- str_remove(string = sample_ids, pattern = "^(.*?)(?=Mutant|Wildtype)"
   as.data.frame()
 
 base::colnames(colData) <- "condition"
+
+colData$donor <- c("006", "006", "046", "046")
 ```
 
 Establish DESeq2 object on TET2mut vs. TET2wt monocytes
 ```{r}
 dds <- DESeqDataSetFromMatrix(countData = mono_counts,
                               colData = colData,
-                              design = ~ condition)
+                              design = ~ donor + condition)
 ```
 Excluding genes with <10 counts per gene
 ```{r}
@@ -946,8 +1443,8 @@ gsea_bottom10 <- gsea_df |>
   head(10)
 
 gsea_bound <- rbind(gsea_bottom10, gsea_top10) |> 
-  mutate("P-value" = case_when(padj < 0.05 ~ "P < 0.05", 
-                          padj >  0.05 ~ "P > 0.05"))
+  mutate("P-value" = case_when(pval < 0.05 ~ "P < 0.05",
+                               pval >  0.05 ~ "P > 0.05"))
 ```
 
 Plotting
