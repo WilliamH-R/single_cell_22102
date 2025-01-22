@@ -37,7 +37,9 @@ plot_reduction_02 <- DimPlot(object = obj, reduction = "umap_harmony",
 
 plot_reduction_025 <- DimPlot(object = obj, reduction = "umap_harmony", 
         group.by = "i.0.25", 
-        label = TRUE)
+        label = TRUE) +
+        labs(x = "UMAP_1", 
+             y = "UMAP_2") + ggtitle(NULL)
 
 plot_reduction_03 <- DimPlot(object = obj, reduction = "umap_harmony", 
         group.by = "i.0.3", 
@@ -48,7 +50,11 @@ plot_reduction_035 <- DimPlot(object = obj, reduction = "umap_harmony",
         label = TRUE)
 
 
-plot_reduction_025
+ggsave(plot = plot_reduction_025, 
+       file = "../results/annotation/clustering without annotation.jpg",  
+       height = 10, 
+       width = 20, 
+       units = "cm")
 
 ```
 
@@ -146,10 +152,17 @@ Woudl have been nice with a CITE-Seq data to ascertain the phenotype of cells.
 
 
 ```{r}
-VlnPlot(object = obj, 
+lymfoid_violin_plot <- VlnPlot(object = obj, 
         features = c("CD8A", "SELL", "CD69", "FCGR3A", "GZMB", "FOS"), 
         idents = c("1", "0", "3", "5"), 
         alpha = 0.1)
+
+ggsave(plot = lymfoid_violin_plot, 
+       file = "../results/annotation/Violin plot of lymphoid cell features for clustering.jpg", 
+       width = 20, 
+       height = 10, 
+       units = "cm")
+
 ```
 CD8A expressed almost solely by cluster 1 - CD8+ T-cells
 SELL expressed almost solely by cluster 0 - SELL is expressed by T cells - mainly naive. And as cluster 0 is not CD8 but are T-cells they must be CD4+ T-cells. 
@@ -278,7 +291,7 @@ umap_w_annotations <- DimPlot(object = obj,
        y = "UMAP_2") + NoLegend()
 
 ggsave(plot = umap_w_annotations, 
-       filename = "../results/UMAP cell annotations.jpg", height = 10, width = 20, units = "cm")
+       filename = "../results/annotation/UMAP cell annotations.jpg", height = 10, width = 20, units = "cm")
 ```
 
 ### Data preparation for heatmap
@@ -309,7 +322,7 @@ heatmap_top_3_genes <- Seurat::DoHeatmap(object = obj, features = top10_diff$gen
                   disp.min = 0)
 
 ggsave(plot = heatmap_top_3_genes, 
-       file = "../results/Heatmap top 3 genes per cluster.jpg", 
+       file = "../results/annotation/Heatmap top 3 genes per cluster.jpg", 
        height = 15, 
        width = 20, 
        units = "cm")
