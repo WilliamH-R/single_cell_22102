@@ -17,6 +17,7 @@ obj <- readRDS(file = "../data/augmented_data.rds")
 
 library(Seurat)
 library(dplyr)
+library(ggplot2)
 ```
 
 Looking at the basic UMAP on integrated data
@@ -250,12 +251,12 @@ Setting the cell identities and setting the cell identities to the column "dtu_c
 Idents(obj) <- "i.0.25"
 
 obj <- RenameIdents(object = obj, 
-                    "0" = "CD4+ T cells",
-                    "1" = "CD8+ T cells",
+                    "0" = "CD4+ T-cells",
+                    "1" = "CD8+ T-cells",
                     "2" = "Classical monocytes",
                     "3" = "NK cells",
                     "4" = "B cells",
-                    "5" = "Activated T-cells?",
+                    "5" = "Activated T-cells",
                     "6" = "Non-classical monocytes",
                     "7" = "Platelets",
                     "8" = "DC")
@@ -268,11 +269,54 @@ obj[["dtu_cell_type"]] <- Idents(object = obj)
 Checking in UMAP
 
 ```{r}
-DimPlot(object = obj,
+umap_w_annotations <- DimPlot(object = obj,
         reduction = "umap_harmony",
-        label = FALSE,
-        group.by = "dtu_cell_type")
+        label = TRUE,
+        group.by = "dtu_cell_type") + 
+  ggtitle(NULL) + 
+  labs(x = "UMAP_1", 
+       y = "UMAP_2") + NoLegend()
+
+ggsave(plot = umap_w_annotations, 
+       filename = "../results/UMAP cell annotations.jpg", height = 10, width = 20, units = "cm")
 ```
+
+### Data preparation for heatmap
+```{r}
+
+# Top3 most differentially expressed markers per cluster
+diff_markers <- FindAllMarkers(object = obj, 
+                               assay = "RNA", 
+                               logfc.threshold = 3, 
+                               min.pct = 0.25)
+
+top10_diff <- diff_markers |> 
+  group_by(cluster) |> 
+  slice_max(order_by = avg_log2FC, n = 3)
+
+```
+
+### Heatmap 
+```{r}
+
+heatmap_top_3_genes <- Seurat::DoHeatmap(object = obj, features = top10_diff$gene, 
+                  cells = 1:500, 
+                  angle = 90, 
+                  size = 4, 
+                  label = FALSE, 
+                  slot = "data", 
+                  disp.max = 1.5, 
+                  disp.min = 0)
+
+ggsave(plot = heatmap_top_3_genes, 
+       file = "../results/Heatmap top 3 genes per cluster.jpg", 
+       height = 15, 
+       width = 20, 
+       units = "cm")
+```
+
+
+
 
 Saving file with annotated clusters
 
@@ -280,3 +324,4 @@ Saving file with annotated clusters
 saveRDS(object = obj, 
         file = "../data/annotated_data.rds")
 ```
+
