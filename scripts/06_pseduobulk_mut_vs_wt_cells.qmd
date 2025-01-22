@@ -1,3 +1,4 @@
+
 ---
 title: "Differential gene expression on mut vs. wt cell subsets"
 format: html
@@ -1484,5 +1485,3 @@ ggplot(data = gsea_bound,
   scale_fill_viridis_d() + 
   theme_bw() 
 ```
-
-
