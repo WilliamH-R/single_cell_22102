@@ -1,35 +1,58 @@
 # Imports
 ```{r}
-library(Seurat)
-library(scDblFinder)
+suppressPackageStartupMessages({
+ library(Seurat)
+ library(scDblFinder)
+ library(scater) # For the plotUMAP function
+})
 ```
 
 # Load data
 ```{r}
-filtered_data <- readRDS("data/filtered_data.rds")
+filtered_data <- readRDS("../data/filtered_data.rds")
 ```
 
 # Find doublets
 ```{r}
-#### COPIED FROM EXERCISE ANSWERS ####
-library(scDblFinder)
 #Convert your seurat object to a sce object
-#Create a sample variable for the doublet predictor to use as input
-filtered_data$sample <- paste0(filtered_data$subject, "_", filtered_data$timepoint)
-sce <- as.SingleCellExperiment(filtered_data)
-#Store the highly variable features as top.var (required to use with scDblFinder)
-top.var <- VariableFeatures(filtered_data)
-
 set.seed(10010101)
-sce.dbl <- scDblFinder(sce,samples="sample", clusters=colLabels(sce))
+sce <- as.SingleCellExperiment(filtered_data)
+sce <- scDblFinder(sce,
+                   samples = "donor_id",
+                   clusters = colLabels(sce))
 
-plotUMAP(sce.dbl, colour_by="scDblFinder.score")
+plotUMAP(sce,
+         colour_by = "scDblFinder.score")
 
+table(sce$scDblFinder.class)
 
-table(sce.dbl$scDblFinder.class)
+plotColData(sce,
+            x = "RNA_snn_res.0.7",
+            y = "scDblFinder.score",
+            colour_by = ("scDblFinder.class"))
+```
 
-plotColData(sce.dbl, x="RNA_snn_res.0.3", y="scDblFinder.score", colour_by=("scDblFinder.class"))
+# Subset to not include doublets
+```{r}
+filtered_data <- sce |>
+  as.Seurat() |>
+  subset(subset = scDblFinder.class == "singlet")
+```
 
-######################################
+# Update dimensions object
+```{r}
+dimensions <- readRDS("../data/dimensions.rds")
+
+# Update dimensions overview
+dimensions <- dimensions |>
+  dplyr::add_row(step = "Remove doublets",
+                 n_genes = nrow(filtered_data),
+                 n_cells = ncol(filtered_data))
+```
+
+# Save objects
+```{r}
+saveRDS(filtered_data, "../data/filtered_no_doublets_data.rds")
+saveRDS(dimensions, "../data/dimensions.rds")
 ```
 

@@ -1,0 +1,360 @@
+
+```{r}
+suppressPackageStartupMessages({
+library(DCATS)
+library(Seurat)
+library(SeuratData)
+library(SingleCellExperiment)
+library(clusterProfiler)
+library(dplyr)
+library(enrichplot)
+library(fgsea)
+library(ggplot2)
+library(ggrepel)
+library(tibble)
+library(tidyverse)
+})
+```
+
+
+```{r}
+pbmc.MTB <- readRDS("~/project/single_cell_22102/data/filtered_data.rds")
+```
+
+```{r}
+pbmc.MTB[["case_control"]] <- pbmc.MTB@meta.data$CHIP
+```
+
+```{r}
+# Convert case_control to a character vector to allow modifications
+pbmc.MTB$case_control <- as.character(pbmc.MTB$case_control)
+
+# Modify the case_control levels
+pbmc.MTB$case_control[pbmc.MTB$case_control == 'control'] <- 'control'
+pbmc.MTB$case_control[pbmc.MTB$case_control == 'chip'] <- 'case'
+# View(pbmc.MTB)
+# Optionally, convert CHIP back to a factor
+pbmc.MTB$case_control <- factor(pbmc.MTB$case_control, levels = c("control", "case"))
+
+# Add id to condition
+pbmc.MTB$case_control_id <- paste0(pbmc.MTB$case_control, pbmc.MTB$orig.ident)
+```
+
+```{r}
+count_mat = table(pbmc.MTB$case_control_id, pbmc.MTB$scType_celltype)
+count_mat
+```
+```{r}
+# Calculate the similarity matrix using the KNN graph
+knn_mat <- knn_simMat(
+  pbmc.MTB@graphs$RNA_snn,  # Use Seurat's SNN graph
+  pbmc.MTB$scType_celltype  # Specify the cell types
+)
+
+dim(knn_mat)
+knn_mat
+```
+
+```{r}
+# Create the design matrix
+design_mat <- data.frame(
+  condition = ifelse(grepl("control", rownames(count_mat)), "healthy", "disease")
+)
+
+rownames(design_mat) <- rownames(count_mat)
+# design_mat
+```
+
+```{r}
+# Perform DCATS analysis
+dcats_results <- dcats_GLM(
+  count_mat = count_mat,
+  design_mat = design_mat,
+  similarity_mat = knn_mat
+)
+```
+
+```{r}
+
+# Extract and inspect results
+dcats_results$fdr
+```
+```{r}
+# rowSums(count_mat)  # Summarize counts for each cell type
+# colSums(count_mat)  # Summarize counts for each condition
+# table(design_mat$condition)
+
+```
+
+
+```{r}
+
+# Visualize the FDR results (Optional)
+fdr_df <- as.data.frame(dcats_results$fdr)
+fdr_df$cell_type <- rownames(fdr_df)
+ggplot(fdr_df, aes(x = reorder(cell_type, condition), y = condition)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "DCATS FDR Results", x = "Cell Type", y = "FDR")
+
+```
+# Differential Expression Analysis
+Focus on significant cell types identified by DCATS for pseudo-bulk differential expression.
+
+```{r}
+library(DESeq2)
+
+# Aggregate counts to sample level
+counts <- AggregateExpression(pbmc.MTB, 
+                              group.by = c("scType_celltype", "case_control_id"),
+                              assays =  "RNA",
+                              return.seurat = FALSE)
+counts <- counts$RNA
+
+# transpose
+counts.t <- t(counts)
+
+# convert to data.frame
+counts.t <- as.data.frame(counts.t)
+
+# get values where to split
+splitRows <- gsub('_.*', '', rownames(counts.t))
+
+# split data.frame
+cts.split <- split.data.frame(counts.t,
+                              f = factor(splitRows))
+# fix colnames and transpose
+cts.split.modified <- lapply(cts.split, function(x){
+    rownames(x) <- gsub('.*_(.*)', '\\1', rownames(x)) #whatever comes after the underscore in the row names will be retained in the final result.
+    t(x)
+})
+```
+
+```{r}
+counts_monocytes <- cts.split.modified$`Classical Monocytes`
+```
+
+```{r}
+colData <- data.frame(samples = colnames(counts_monocytes))
+
+colData <- colData %>%
+  dplyr::mutate(condition = ifelse(grepl('case', samples), 'case', 'control')) %>%
+  column_to_rownames(var = 'samples')
+```
+
+
+### Subset the Count Matrix for a Specific Cell Type
+```{r}
+# Create DESeq2 object   
+dds <- DESeqDataSetFromMatrix(countData = counts_monocytes,
+                              colData = colData,
+                              design = ~ condition)
+```
+. Remove rows (genes) that have fewer than 10 reads from dds.
+
+# filter
+```{r}
+keep <- rowSums(counts(dds)) >=10
+dds <- dds[keep,]
+```
+
+```{r}
+dds <- DESeq(dds)
+```
+
+```{r}
+resultsNames(dds)
+```
+```{r}
+# Generate results object
+res <- results(dds, name = "condition_control_vs_case")
+
+summary(res)
+```
+```{r}
+# Turn the DESeq2 results object into a tibble for use with tidyverse functions
+res_tbl <- res %>%
+  data.frame() %>%
+  rownames_to_column(var = "gene") %>%
+  as_tibble() %>%
+  arrange(padj)
+
+# Check results output
+res_tbl |> arrange(-log2FoldChange)
+```
+```{r}
+# Set thresholds
+padj_cutoff <- 0.99934
+
+# Subset the significant results
+sig_res <- dplyr::filter(res_tbl, padj < padj_cutoff) %>%
+  dplyr::arrange(padj)
+
+# Check significant genes output
+sig_res
+```
+```{r}
+## Order results by padj values
+top20_sig_genes <- sig_res %>%
+  dplyr::arrange(padj) %>%
+  dplyr::pull(gene) %>%
+  head(n=20)
+
+## Order results by log fold change
+top20_sig_genes <- sig_res %>%
+  dplyr::arrange(log2FoldChange) %>%
+  dplyr::pull(gene) %>%
+  head(n=20)
+```
+
+```{r}
+# library(msigdb)
+```
+
+
+```{r}
+gsList <- readRDS("/home/projects/22102_single_cell/day5/gene_sets.Rds")
+res$genes <- rownames(res)
+#Add EntrezID for the genes
+library(org.Hs.eg.db)
+```
+```{r}
+Entrez <- AnnotationDbi::select(org.Hs.eg.db,
+                                    key=res$genes, 
+                                    columns="ENTREZID",
+                                    keytype="SYMBOL")
+```
+```{r}
+Entrez <- as_tibble(Entrez)
+res <- as.data.frame(res)
+res <- inner_join(res, Entrez, by=c("genes"="SYMBOL"))
+#Remove those genes that do not have an entrezid
+res <- filter(res, !is.na(ENTREZID))
+gene_list  <- gene_list[!is.na(names(gene_list))]
+```
+
+```{r}
+#Create new metric
+res$stat_sig <- -log10(res$pvalue) * sign(res$log2FoldChange)
+rankData <- res$stat_sig
+names(rankData) <- res$genes
+head(rankData)
+```
+
+```{r}
+#Running fgsea algorithm:
+fgseaRes <- fgsea(pathways=gsList, stats=na.omit(rankData))
+
+#Tidy the results
+fgseaResTidy <- fgseaRes %>%
+  as_tibble() %>%
+  arrange(desc(NES))
+```
+
+```{r}
+fgseaResTidy
+```
+```{r}
+# Sort the data frame based on NES in descending order to get top 10 pathways
+top_10 <- fgseaResTidy %>%
+  arrange(desc(NES)) %>%
+  head(10)
+
+# Sort the data frame based on NES in ascending order to get bottom 10 pathways
+bottom_10 <- fgseaResTidy %>%
+  arrange(NES) %>%
+  head(10)
+
+# Combine top 10 and bottom 10 pathways
+top_bottom_10 <- rbind(top_10, bottom_10)
+
+ggplot(top_bottom_10, aes(reorder(pathway, NES), NES)) +
+  geom_col(aes(fill=padj<0.05)) +
+  coord_flip() +
+  labs(x="Pathway", y="Normalized Enrichment Score",
+       title="Top 10 and Bottom 10 Hallmark pathways based on Absolute NES from GSEA") + 
+  theme_minimal()
+```
+```{r}
+suppressPackageStartupMessages({
+library(CellChat)
+library(patchwork)
+library(future)
+})
+options(stringsAsFactors = FALSE)
+```
+
+```{r}
+#Create a CellChat object
+cellchat <- createCellChat(object = pbmc.MTB, meta = pbmc.MTB@meta.data, group.by = "scType_celltype")
+```
+```{r}
+#Set interaction-ligand database
+CellChatDB <- CellChatDB.human 
+showDatabaseCategory(CellChatDB)
+```
+```{r}
+# Show the structure of the database
+dplyr::glimpse(CellChatDB$interaction)
+```
+```{r}
+# use a subset of CellChatDB for cell-cell communication analysis
+CellChatDB.use <- subsetDB(CellChatDB, search = "Secreted Signaling") # use Secreted Signaling
+#use all CellChatDB for cell-cell communication analysis
+#CellChatDB.use <- CellChatDB # simply use the default CellChatDB
+
+# set the used database in the object
+cellchat@DB <- CellChatDB.use
+```
+
+```{r}
+# subset the expression data of signaling genes for saving computation cost
+cellchat <- subsetData(cellchat) # This step is necessary if using the whole database
+future::plan("multisession", workers = 4) # do parallel
+cellchat <- identifyOverExpressedGenes(cellchat)
+cellchat <- identifyOverExpressedInteractions(cellchat)
+```
+
+```{r}
+cellchat <- computeCommunProb(cellchat)
+# Filter out the cell-cell communication if there are only few number of cells in certain cell groups
+cellchat <- filterCommunication(cellchat, min.cells = 10)
+
+#Extract the inferred cellular communication network as a data frame
+df.net <- subsetCommunication(cellchat) #returns a data frame consisting of all the inferred cell-cell communications at the level of ligands/receptors. 
+
+#Infer the cell-cell communication at a signaling pathway level
+cellchat <- computeCommunProbPathway(cellchat)
+```
+```{r}
+#Calculate the aggregated cell-cell communication network
+cellchat <- aggregateNet(cellchat)
+groupSize <- as.numeric(table(cellchat@idents))
+par(mfrow = c(1,2), xpd=TRUE)
+netVisual_circle(cellchat@net$count, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Number of interactions")
+netVisual_circle(cellchat@net$weight, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Interaction weights/strength")
+```
+```{r}
+pathways <- cellchat@netP$pathways
+
+pathways.show <- c("TNF") 
+
+# Circle plot
+par(mfrow=c(1,1))
+netVisual_aggregate(cellchat, signaling = pathways.show, layout = "circle")
+```
+```{r}
+# Heatmap
+par(mfrow=c(1,1))
+netVisual_heatmap(cellchat, signaling = pathways.show, color.heatmap = "Reds")
+```
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,56 @@
+```{r}
+library(Seurat)
+library(scater)
+
+data <- readRDS("../data/augmented_data.rds")
+
+data <- RunUMAP(data,
+                dims = 1:30,
+                n.components = 3,
+                reduction = "Harmony_Integration",
+                reduction.name = "umap_3d")
+  
+sce.dbl <- as.SingleCellExperiment(data)
+
+# Extract the 3D UMAP embeddings from the Seurat object
+# Add the UMAP embeddings to the SingleCellExperiment object
+reducedDim(sce.dbl, "umap_3d") <- Embeddings(data, reduction = "umap_3d")
+
+# Use plotUMAP with the specified reduction
+plotUMAP(sce.dbl,
+         ncomponents = 3,
+         dimred = "umap_3d",
+         colour_by = "cell_type")
+```
+
+```{r}
+library(plotly)
+
+# Extract the UMAP embeddings and metadata
+umap_3d_embeddings <- reducedDim(sce.dbl, "umap_3d")
+metadata <- colData(sce.dbl)
+
+# Create a data frame for plotting
+plot_data <- data.frame(
+  UMAP_1 = umap_3d_embeddings[, 1],
+  UMAP_2 = umap_3d_embeddings[, 2],
+  UMAP_3 = umap_3d_embeddings[, 3],
+  cell_type = metadata$cell_type # Replace "cell_type" with the actual column name in your metadata
+)
+
+# Generate a 3D scatter plot
+plot <- plot_ly(
+  data = plot_data,
+  x = ~UMAP_1,
+  y = ~UMAP_2,
+  z = ~UMAP_3,
+  color = ~cell_type,
+  type = "scatter3d",
+  mode = "markers",
+  marker = list(size = 3) # Adjust size for better visualization
+)
+
+# Show the plot
+plot
+```
+
