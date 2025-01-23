@@ -51,10 +51,11 @@ knn_mat <- knn_simMat(
 ```{r}
 # Create the design matrix
 design_mat <- data.frame(
-  condition = ifelse(grepl("control", rownames(count_mat)), "healthy", "disease")
+  condition = ifelse(grepl("control", rownames(count_mat)), "ahealthy", "disease")
 )
 
 rownames(design_mat) <- rownames(count_mat)
+design_mat
 ```
 
 ```{r}
@@ -64,11 +65,12 @@ dcats_results <- dcats_GLM(
   design_mat = design_mat,
   similarity_mat = knn_mat
 )
+dcats_results
 ```
 
 ```{r}
 # Extract and inspect results
-# dcats_results$fdr
+dcats_results$fdr
 ```
 
 ```{r}
@@ -79,12 +81,45 @@ dcats_results <- dcats_GLM(
 ```
 
 ```{r}
-# Visualize the FDR results (Optional)
-fdr_df <- as.data.frame(dcats_results$fdr)
-fdr_df$cell_type <- rownames(fdr_df)
-ggplot(fdr_df, aes(x = reorder(cell_type, condition), y = condition)) +
+# # Visualize the FDR results (Optional)
+fdr_df <- as.data.frame(
+                        dcats_results$fdr,
+                        ) |> 
+  tibble::as_tibble(rownames = "Cell Type") |> 
+  rename(fdr = condition)
+
+coef_df <- as.data.frame(dcats_results$ceoffs)|> 
+  tibble::as_tibble(rownames = "Cell Type") |> 
+  rename(coeffs = condition)
+
+df <- fdr_df |> left_join(coef_df) |> 
+  mutate(sig = case_when(fdr <= 0.05 ~ "Significant",
+                         TRUE ~ "Not significant"))
+
+p1 <- ggplot(df,
+             aes(x = reorder(`Cell Type`, coeffs),
+                 y = coeffs,
+                 fill = sig)) +
   geom_bar(stat = "identity") +
-  coord_flip() +
-  labs(title = "DCATS FDR Results", x = "Cell Type", y = "FDR")
+    labs(title = "DCATS Results",
+       x = "Cell Type",
+       y = "Estimated coefficient",
+       fill = "")+
+  coord_flip()+
+  scale_fill_viridis_d() +
+  theme_bw()
+  
+p1
+
+output_dir <- "../results/06"
+
+ggsave(
+  filename = file.path(output_dir, "dcats.png"),
+  plot = p1,
+  width = 8, 
+  height = 6,
+  dpi = 300,
+  scale = 1
+)
 ```
 
