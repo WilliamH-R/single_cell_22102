@@ -385,7 +385,11 @@ plot_mt <- ggplot(data = meta_data,
   scale_color_viridis() + 
   labs(color = "% mitochondrial genes", 
        title = "Mitochondrial genes check") +
-  theme_dark()
+  theme_dark() + 
+  geom_hline(yintercept = 250, color = "red") +
+  geom_hline(yintercept = 2000, color = "red") + 
+  geom_vline(xintercept = 1000, color = "red") +
+  geom_vline(xintercept = 5000, color = "red")
 plot_mt
 
 plot_hb <- ggplot(data = meta_data,
@@ -396,7 +400,11 @@ plot_hb <- ggplot(data = meta_data,
   scale_color_viridis() + 
   labs(color = "% hemoglobin genes", 
        title = "Hemoglobin gene check") +
-  theme_dark()
+  theme_dark()+ 
+  geom_hline(yintercept = 250, color = "red") +
+  geom_hline(yintercept = 2000, color = "red") + 
+  geom_vline(xintercept = 1000, color = "red") +
+  geom_vline(xintercept = 5000, color = "red")
 
 plot_ribo <- ggplot(data = meta_data,
        mapping = aes(x = nCount_RNA, 
@@ -405,13 +413,20 @@ plot_ribo <- ggplot(data = meta_data,
   geom_point(alpha = 0.1) + 
   scale_color_viridis() + 
   labs(color = "% ribosomal genes", 
-       title = "Hemoglobin gene check") +
-  theme_dark()
+       title = "Ribosomal gene check") +
+  theme_dark()+ 
+  geom_hline(yintercept = 250, color = "red") +
+  geom_hline(yintercept = 2000, color = "red") + 
+  geom_vline(xintercept = 1000, color = "red") +
+  geom_vline(xintercept = 5000, color = "red")
 
 script01_plot03 <- plot_mt / plot_hb / plot_ribo
 
 ggsave(plot = script01_plot03, 
-       file = "../results/01/plot3.jpg")
+       file = "../results/01/plot3.jpg", 
+       width = 15, 
+       height = 10,
+       dpi = 900)
 ```
 
 
