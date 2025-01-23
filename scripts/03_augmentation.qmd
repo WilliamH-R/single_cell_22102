@@ -174,7 +174,7 @@ ggplot(contingency_table, aes(x = Cluster,
   labs(title = "Tileplot of Donor ID and Cluster (scaled pr. donor)",
        x = "Cluster",
        y = "Donor ID",
-       fill = "Count") +
+       fill = "Fraction") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ggsave(filename = "../results/03/tileplot_donor_post.png")
 ```
@@ -201,7 +201,7 @@ ggplot(contingency_table, aes(x = Cluster,
   labs(title = "Tileplot of Donor ID and Cluster (scaled pr. cluster)",
        x = "Cluster",
        y = "Donor ID",
-       fill = "Count") +
+       fill = "Fraction") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ggsave(filename = "../results/03/tileplot_cluster_post.png")
 ```
