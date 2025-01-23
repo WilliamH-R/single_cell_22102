@@ -1,10 +1,11 @@
 ```{r}
 obj <- readRDS(file = "../data/augmented_data.rds")
-
+output_dir <- "../results/04"
 
 library(Seurat)
 library(SingleR)
 library(SeuratData)
+library(viridis)
 ```
 
 ```{r}
@@ -51,6 +52,27 @@ DimPlot(
   label = TRUE                         # Add labels for clarity
 ) 
 
+# Generate a DimPlot for SingleR predictions using SeuratData
+dimplot_seurat <- DimPlot(
+  obj,
+  reduction = 'umap_harmony',
+  group.by = 'cell_type_automatic_seurat',
+  label = TRUE
+) + NoLegend()+
+  ggtitle("SingleR cell annotation",
+          ) +
+  labs(subtitle = "Using Seurat pbmc3k") +
+  theme(plot.title = element_text(hjust=0))+
+  xlab("Harmony integration 1")+
+  ylab("Harmnony integration 2")
+
+# Save the DimPlot
+ggsave(
+  filename = file.path(output_dir, "dimplot_singleR_SeuratData.png"),
+  plot = dimplot_seurat,
+  width = 8, height = 6
+)
+
 ```
 
 
@@ -79,6 +101,29 @@ cell_type_pred <- readRDS("../data/cell_type_pred_singleR.rds")
 obj$cell_type_automatic <- cell_type_pred$pruned.labels[match(rownames(obj@meta.data), rownames(cell_type_pred))]
 
 DimPlot(obj, reduction = 'umap_harmony', group.by = 'cell_type_automatic', label = TRUE) + NoLegend()
+
+# Generate a DimPlot for SingleR predictions using pbmcsca
+dimplot_pbmcsca <- DimPlot(
+  obj,
+  reduction = 'umap_harmony',
+  group.by = 'cell_type_automatic',
+  label = TRUE,
+  repel = TRUE
+) + NoLegend() +
+  ggtitle("SingleR cell annotation",
+          ) +
+  labs(subtitle = "Using Seurat pbmcsca") +
+  theme(plot.title = element_text(hjust=0))+
+  xlab("Harmony integration 1")+
+  ylab("Harmnony integration 2")
+
+# Save the DimPlot
+ggsave(
+  filename = file.path(output_dir, "dimplot_singleR_pbmcsca.png"),
+  plot = dimplot_pbmcsca,
+  width = 8, height = 6
+)
+
 ```
 
 
