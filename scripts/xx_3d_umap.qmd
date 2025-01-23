@@ -1,6 +1,8 @@
 ```{r}
 library(Seurat)
 library(scater)
+library(htmlwidgets)
+library(webshot)
 
 data <- readRDS("../data/augmented_data.rds")
 
@@ -50,7 +52,87 @@ plot <- plot_ly(
   marker = list(size = 3) # Adjust size for better visualization
 )
 
+saveWidget(plot, "../results/3d_umap.html")
+webshot("../results/3d_umap.html", "../results/3d_umap.png")
+
 # Show the plot
 plot
+```
+
+Create a HTML with animation
+```{r}
+library(plotly)
+library(htmlwidgets)
+library(utils)
+
+# Generate a 3D scatter plot
+fig <- plot_ly(
+  data = plot_data,
+  x = ~UMAP_1,
+  y = ~UMAP_2,
+  z = ~UMAP_3,
+  color = ~cell_type,
+  type = "scatter3d",
+  mode = "markers",
+  marker = list(size = 3) # Adjust size for better visualization
+) |>
+  layout(scene = list(xaxis = list(title = "", showticklabels = FALSE, zeroline = FALSE),
+                      yaxis = list(title = "", showticklabels = FALSE, zeroline = FALSE),
+                      zaxis = list(title = "", showticklabels = FALSE, zeroline = FALSE),
+                      camera = list(
+    eye = list(
+      x = 1.25,
+      y = 1.25,
+      z = 1.25
+    ),
+    center = list(x = 0,
+                  y = 0,
+                  z = 0)
+  ))) |>
+  onRender("
+      function(el, x){
+  var id = el.getAttribute('id');
+  var gd = document.getElementById(id);
+  Plotly.update(id).then(attach);
+  function attach() {
+    var cnt = 0;
+    
+    function run() {
+      rotate('scene', Math.PI / 360);
+      requestAnimationFrame(run);
+    } 
+    run();
+    
+    function rotate(id, angle) {
+      var eye0 = gd.layout[id].camera.eye
+      var rtz = xyz2rtz(eye0);
+      rtz.t += angle;
+      
+      var eye1 = rtz2xyz(rtz);
+      Plotly.relayout(gd, id + '.camera.eye', eye1)
+    }
+    
+    function xyz2rtz(xyz) {
+      return {
+        r: Math.sqrt(xyz.x * xyz.x + xyz.y * xyz.y),
+        t: Math.atan2(xyz.y, xyz.x),
+        z: xyz.z
+      };
+    }
+    
+    function rtz2xyz(rtz) {
+      return {
+        x: rtz.r * Math.cos(rtz.t),
+        y: rtz.r * Math.sin(rtz.t),
+        z: rtz.z
+      };
+    }
+  };
+}
+    ")
+
+htmlwidgets::saveWidget(partial_bundle(fig), file = "results/3d_umap/rotate_scatter3d.HTML", selfcontained = TRUE)
+
+utils::browseURL("results/3d_umap/rotate_scatter3d.HTML")
 ```
 
