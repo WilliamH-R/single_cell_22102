@@ -51,7 +51,7 @@ plot_reduction_035 <- DimPlot(object = obj, reduction = "umap_harmony",
 
 
 ggsave(plot = plot_reduction_025, 
-       file = "../results/annotation/clustering without annotation.jpg",  
+       file = "../results/04/clustering without annotation.jpg",  
        height = 10, 
        width = 20, 
        units = "cm")
@@ -66,7 +66,38 @@ Setting `Idents()` to i.0.25
 Idents(obj) <- "i.0.25"
 ```
 
-## Identification of differentialle expressed genes across clusters
+
+### ID of the top3 differentially expressed genes per cluster. 
+```{r}
+# Top3 most differentially expressed markers per cluster
+diff_markers <- FindAllMarkers(object = obj, 
+                               assay = "RNA", 
+                               logfc.threshold = 3, 
+                               min.pct = 0.25)
+
+top10_diff <- diff_markers |> 
+  group_by(cluster) |> 
+  slice_max(order_by = avg_log2FC, n = 3)
+```
+
+
+## Dotplot
+
+Dotplot
+```{r}
+dotplot1 <- DotPlot(object = obj, features = top10_diff$gene, assay = "RNA", scale = TRUE) +
+  theme(axis.text.x = element_text(angle = 60)) +
+  theme(axis.text.x = element_text(hjust = 1))
+
+ggsave(plot = dotplot1, 
+       file = "../results/04/Dotplot top3 genes per annotated cluster.jpg", 
+     height = 15, 
+    width = 35, 
+   units = "cm")
+```
+
+
+## Identification of differentially expressed genes across clusters
 
 *Doing with the FindConservedMarkers function*
 
@@ -153,12 +184,12 @@ Woudl have been nice with a CITE-Seq data to ascertain the phenotype of cells.
 
 ```{r}
 lymfoid_violin_plot <- VlnPlot(object = obj, 
-        features = c("CD8A", "SELL", "CD69", "FCGR3A", "GZMB", "FOS"), 
+        features = c("TRAC", "CD8A", "FCGR3A", "NCAM1", "GZMB", "CD69"), 
         idents = c("1", "0", "3", "5"), 
         alpha = 0.1)
 
 ggsave(plot = lymfoid_violin_plot, 
-       file = "../results/annotation/Violin plot of lymphoid cell features for clustering.jpg", 
+       file = "../results/04/Violin plot of lymphoid cell features for clustering.jpg", 
        width = 20, 
        height = 10, 
        units = "cm")
@@ -291,41 +322,37 @@ umap_w_annotations <- DimPlot(object = obj,
        y = "UMAP_2") + NoLegend()
 
 ggsave(plot = umap_w_annotations, 
-       filename = "../results/annotation/UMAP cell annotations.jpg", height = 10, width = 20, units = "cm")
+       filename = "../results/04/UMAP cell 04s.jpg", height = 10, width = 20, units = "cm")
 ```
 
-### Data preparation for heatmap
+
+### Heatmap
+Not used
 ```{r}
 
-# Top3 most differentially expressed markers per cluster
-diff_markers <- FindAllMarkers(object = obj, 
-                               assay = "RNA", 
-                               logfc.threshold = 3, 
-                               min.pct = 0.25)
-
-top10_diff <- diff_markers |> 
-  group_by(cluster) |> 
-  slice_max(order_by = avg_log2FC, n = 3)
+#heatmap_top_3_genes <- Seurat::DoHeatmap(object = obj, 
+ #                                        features = top10_diff$gene,
+  #                                       cells = 1:500,
+   #                                      angle = 90, 
+    #              size = 4, 
+     #             label = FALSE, 
+      #            slot = "scale.data")
 
 ```
 
-### Heatmap 
+
+Featureplots with the best marker for each cluster
 ```{r}
+featureplots_all_clusters <- FeaturePlot(object = obj, 
+            features = c("SELL", "CD8B", "KLRF1", "CD14", "CD79A", "CD69", "FCGR3A", "PPBP", "SCT"), 
+            reduction = "umap_harmony")
 
-heatmap_top_3_genes <- Seurat::DoHeatmap(object = obj, features = top10_diff$gene, 
-                  cells = 1:500, 
-                  angle = 90, 
-                  size = 4, 
-                  label = FALSE, 
-                  slot = "data", 
-                  disp.max = 1.5, 
-                  disp.min = 0)
-
-ggsave(plot = heatmap_top_3_genes, 
-       file = "../results/annotation/Heatmap top 3 genes per cluster.jpg", 
+ggsave(plot = featureplots_all_clusters, 
+       file = "../results/04/Featureplot for all clusters.jpg", 
+       width = 25, 
        height = 15, 
-       width = 20, 
-       units = "cm")
+       units = "cm", 
+       dpi = 600)
 ```
 
 
