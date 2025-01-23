@@ -469,13 +469,38 @@ ggplot(contingency_table, aes(x = Cluster,
   geom_tile() +
   scale_fill_viridis_c(option = "D") + # Option "D" is one of the default viridis color maps
   theme_minimal() +
-  labs(title = "Tileplot of Donor ID and Cluster",
+  labs(title = "Tileplot of Donor ID and Cluster (scaled pr. donor)",
        x = "Cluster",
        y = "Donor ID",
        fill = "Count") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
+```{r}
+# Assuming your raw_data variables are defined as in the example
+contingency_table <- table(raw_data$donor_disease,
+                           raw_data@meta.data$RNA_snn_res.0.7) |>
+  as.data.frame()
+colnames(contingency_table) <- c("DonorID", "Cluster", "Count")
+
+# Scale data pr. cluster
+contingency_table <- contingency_table |>
+  group_by(Cluster) |>
+  mutate(Count_scaled = Count / sum(Count))
+
+
+ggplot(contingency_table, aes(x = Cluster,
+                              y = DonorID,
+                              fill = Count_scaled)) +
+  geom_tile() +
+  scale_fill_viridis_c(option = "D") + # Option "D" is one of the default viridis color maps
+  theme_minimal() +
+  labs(title = "Tileplot of Donor ID and Cluster (scaled pr. cluster)",
+       x = "Cluster",
+       y = "Donor ID",
+       fill = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
 # Save object
 ```{r}
 saveRDS(raw_data, "../data/filtered_data.rds")
