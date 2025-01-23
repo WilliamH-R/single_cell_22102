@@ -17,6 +17,7 @@ obj <- readRDS(file = "../data/augmented_data.rds")
 
 library(Seurat)
 library(dplyr)
+library(ggplot2)
 ```
 
 Looking at the basic UMAP on integrated data
@@ -36,7 +37,9 @@ plot_reduction_02 <- DimPlot(object = obj, reduction = "umap_harmony",
 
 plot_reduction_025 <- DimPlot(object = obj, reduction = "umap_harmony", 
         group.by = "i.0.25", 
-        label = TRUE)
+        label = TRUE) +
+        labs(x = "UMAP_1", 
+             y = "UMAP_2") + ggtitle(NULL)
 
 plot_reduction_03 <- DimPlot(object = obj, reduction = "umap_harmony", 
         group.by = "i.0.3", 
@@ -47,7 +50,11 @@ plot_reduction_035 <- DimPlot(object = obj, reduction = "umap_harmony",
         label = TRUE)
 
 
-plot_reduction_025
+ggsave(plot = plot_reduction_025, 
+       file = "../results/04/clustering without annotation.jpg",  
+       height = 10, 
+       width = 20, 
+       units = "cm")
 
 ```
 
@@ -59,7 +66,38 @@ Setting `Idents()` to i.0.25
 Idents(obj) <- "i.0.25"
 ```
 
-## Identification of differentialle expressed genes across clusters
+
+### ID of the top3 differentially expressed genes per cluster. 
+```{r}
+# Top3 most differentially expressed markers per cluster
+diff_markers <- FindAllMarkers(object = obj, 
+                               assay = "RNA", 
+                               logfc.threshold = 3, 
+                               min.pct = 0.25)
+
+top10_diff <- diff_markers |> 
+  group_by(cluster) |> 
+  slice_max(order_by = avg_log2FC, n = 3)
+```
+
+
+## Dotplot
+
+Dotplot
+```{r}
+dotplot1 <- DotPlot(object = obj, features = top10_diff$gene, assay = "RNA", scale = TRUE) +
+  theme(axis.text.x = element_text(angle = 60)) +
+  theme(axis.text.x = element_text(hjust = 1))
+
+ggsave(plot = dotplot1, 
+       file = "../results/04/Dotplot top3 genes per annotated cluster.jpg", 
+     height = 15, 
+    width = 35, 
+   units = "cm")
+```
+
+
+## Identification of differentially expressed genes across clusters
 
 *Doing with the FindConservedMarkers function*
 
@@ -145,10 +183,17 @@ Woudl have been nice with a CITE-Seq data to ascertain the phenotype of cells.
 
 
 ```{r}
-VlnPlot(object = obj, 
-        features = c("CD8A", "SELL", "CD69", "FCGR3A", "GZMB", "FOS"), 
+lymfoid_violin_plot <- VlnPlot(object = obj, 
+        features = c("TRAC", "CD8A", "FCGR3A", "NCAM1", "GZMB", "CD69"), 
         idents = c("1", "0", "3", "5"), 
         alpha = 0.1)
+
+ggsave(plot = lymfoid_violin_plot, 
+       file = "../results/04/Violin plot of lymphoid cell features for clustering.jpg", 
+       width = 20, 
+       height = 10, 
+       units = "cm")
+
 ```
 CD8A expressed almost solely by cluster 1 - CD8+ T-cells
 SELL expressed almost solely by cluster 0 - SELL is expressed by T cells - mainly naive. And as cluster 0 is not CD8 but are T-cells they must be CD4+ T-cells. 
@@ -250,12 +295,12 @@ Setting the cell identities and setting the cell identities to the column "dtu_c
 Idents(obj) <- "i.0.25"
 
 obj <- RenameIdents(object = obj, 
-                    "0" = "CD4+ T cells",
-                    "1" = "CD8+ T cells",
+                    "0" = "CD4+ T-cells",
+                    "1" = "CD8+ T-cells",
                     "2" = "Classical monocytes",
                     "3" = "NK cells",
                     "4" = "B cells",
-                    "5" = "Activated T-cells?",
+                    "5" = "Activated T-cells",
                     "6" = "Non-classical monocytes",
                     "7" = "Platelets",
                     "8" = "DC")
@@ -268,11 +313,50 @@ obj[["dtu_cell_type"]] <- Idents(object = obj)
 Checking in UMAP
 
 ```{r}
-DimPlot(object = obj,
+umap_w_annotations <- DimPlot(object = obj,
         reduction = "umap_harmony",
-        label = FALSE,
-        group.by = "dtu_cell_type")
+        label = TRUE,
+        group.by = "dtu_cell_type") + 
+  ggtitle(NULL) + 
+  labs(x = "UMAP_1", 
+       y = "UMAP_2") + NoLegend()
+
+ggsave(plot = umap_w_annotations, 
+       filename = "../results/04/UMAP cell 04s.jpg", height = 10, width = 20, units = "cm")
 ```
+
+
+### Heatmap
+Not used
+```{r}
+
+#heatmap_top_3_genes <- Seurat::DoHeatmap(object = obj, 
+ #                                        features = top10_diff$gene,
+  #                                       cells = 1:500,
+   #                                      angle = 90, 
+    #              size = 4, 
+     #             label = FALSE, 
+      #            slot = "scale.data")
+
+```
+
+
+Featureplots with the best marker for each cluster
+```{r}
+featureplots_all_clusters <- FeaturePlot(object = obj, 
+            features = c("SELL", "CD8B", "KLRF1", "CD14", "CD79A", "CD69", "FCGR3A", "PPBP", "SCT"), 
+            reduction = "umap_harmony")
+
+ggsave(plot = featureplots_all_clusters, 
+       file = "../results/04/Featureplot for all clusters.jpg", 
+       width = 25, 
+       height = 15, 
+       units = "cm", 
+       dpi = 600)
+```
+
+
+
 
 Saving file with annotated clusters
 
@@ -280,3 +364,4 @@ Saving file with annotated clusters
 saveRDS(object = obj, 
         file = "../data/annotated_data.rds")
 ```
+

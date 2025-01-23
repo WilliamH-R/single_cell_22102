@@ -1,10 +1,80 @@
 ```{r}
 obj <- readRDS(file = "../data/augmented_data.rds")
-
+output_dir <- "../results/04"
 
 library(Seurat)
 library(SingleR)
+library(SeuratData)
+library(viridis)
 ```
+
+```{r}
+# Load the PBMC dataset from SeuratData
+# InstallData("pbmc3k")  # Install the pbmc3k dataset if not already installed
+data("pbmc3k")
+pbmc3k <- UpdateSeuratObject(pbmc3k)
+
+pbmc3k@meta.data$seurat_annotations <- as.character(pbmc3k@meta.data$seurat_annotations)
+
+# Transform the PBMC reference (Seurat object) to a SingleCellExperiment (SCE) object
+ref <- as.SingleCellExperiment(pbmc3k, assay = "RNA")
+
+# Extract the counts matrix from the query Seurat object for SingleR annotation
+pbmc_counts <- GetAssayData(obj, assay = "RNA", slot = "counts")
+
+# Perform cell type prediction using SingleR
+cell_type_pred <- SingleR(
+  test = pbmc_counts,        # Query counts
+  ref = ref,                 # Reference SCE object
+  labels = ref$seurat_annotations,        # Use cluster identities as labels
+  de.method = "wilcox"       # Use Wilcoxon method for marker gene detection
+)
+
+# Save the SingleR predictions
+saveRDS(cell_type_pred, "../data/04_cell_type_pred_singleR_SeuratData.rds")
+```
+
+```{r}
+# Load the saved SingleR predictions
+cell_type_pred <- readRDS("../data/04_cell_type_pred_singleR_SeuratData.rds")
+
+# Add predicted cell types to the query Seurat object metadata
+obj$cell_type_automatic_seurat <- cell_type_pred$pruned.labels[
+  match(rownames(obj@meta.data), rownames(cell_type_pred))
+]
+```
+
+```{r}
+DimPlot(
+  obj,
+  reduction = 'umap_harmony',          # Adjust reduction name if needed
+  group.by = 'cell_type_automatic_seurat',    # Group by the new predicted cell type
+  label = TRUE                         # Add labels for clarity
+) 
+
+# Generate a DimPlot for SingleR predictions using SeuratData
+dimplot_seurat <- DimPlot(
+  obj,
+  reduction = 'umap_harmony',
+  group.by = 'cell_type_automatic_seurat',
+  label = TRUE
+) + NoLegend()+
+  ggtitle("SingleR cell annotation",
+          ) +
+  labs(subtitle = "Using Seurat pbmc3k") +
+  theme(plot.title = element_text(hjust=0))+
+  xlab("Harmony integration 1")+
+  ylab("Harmnony integration 2")
+
+# Save the DimPlot
+ggsave(
+  filename = file.path(output_dir, "dimplot_singleR_SeuratData.png"),
+  plot = dimplot_seurat,
+  width = 8, height = 6
+)
+
+```
+
 
 ```{r}
 # Load the dataset
@@ -13,14 +83,15 @@ pbmcsca <- readRDS("/home/projects/22102_single_cell/day3/pbmcsca.rds")
 
 ```{r}
 # Transform the reference Seurat Object to a SCE object like done yesterday.
-ref <- as.SingleCellExperiment(pbmcsca, assay = "RNA")
+ref_2 <- as.SingleCellExperiment(pbmcsca, assay = "RNA")
 
-pbmc_counts <- GetAssayData(obj, assay = "RNA", layer = 'counts')
+# pbmc_counts <- GetAssayData(obj, assay = "RNA", layer = 'counts')
 ```
+
 ```{r}
 cell_type_pred <- SingleR(test = pbmc_counts,
-                ref = ref,
-                labels = ref$CellType,
+                ref = ref_2,
+                labels = ref_2$CellType,
                 de.method="wilcox")
 saveRDS(cell_type_pred, "../data/cell_type_pred_singleR.rds")
 ```
@@ -30,6 +101,29 @@ cell_type_pred <- readRDS("../data/cell_type_pred_singleR.rds")
 obj$cell_type_automatic <- cell_type_pred$pruned.labels[match(rownames(obj@meta.data), rownames(cell_type_pred))]
 
 DimPlot(obj, reduction = 'umap_harmony', group.by = 'cell_type_automatic', label = TRUE) + NoLegend()
+
+# Generate a DimPlot for SingleR predictions using pbmcsca
+dimplot_pbmcsca <- DimPlot(
+  obj,
+  reduction = 'umap_harmony',
+  group.by = 'cell_type_automatic',
+  label = TRUE,
+  repel = TRUE
+) + NoLegend() +
+  ggtitle("SingleR cell annotation",
+          ) +
+  labs(subtitle = "Using Seurat pbmcsca") +
+  theme(plot.title = element_text(hjust=0))+
+  xlab("Harmony integration 1")+
+  ylab("Harmnony integration 2")
+
+# Save the DimPlot
+ggsave(
+  filename = file.path(output_dir, "dimplot_singleR_pbmcsca.png"),
+  plot = dimplot_pbmcsca,
+  width = 8, height = 6
+)
+
 ```
 
 

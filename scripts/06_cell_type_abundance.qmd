@@ -1,0 +1,90 @@
+```{r}
+suppressPackageStartupMessages({
+library(DCATS)
+library(Seurat)
+library(SeuratData)
+library(dplyr)
+library(enrichplot)
+library(ggplot2)
+library(ggrepel)
+library(tibble)
+library(tidyverse)
+})
+```
+
+
+```{r}
+data <- readRDS("../data/annotated_data.rds")
+```
+
+```{r}
+data[["case_control"]] <- data@meta.data$CHIP
+```
+
+```{r}
+# Convert case_control to a character vector to allow modifications
+data$case_control <- as.character(data$case_control)
+
+# Modify the case_control levels
+data$case_control[data$case_control == "control"] <- "control"
+data$case_control[data$case_control == "chip"] <- "case"
+# View(data)
+# Optionally, convert CHIP back to a factor
+data$case_control <- factor(data$case_control, levels = c("control", "case"))
+
+# Add id to condition
+data$case_control_id <- paste0(data$case_control, data$donor_id)
+```
+
+```{r}
+count_mat = table(data$case_control_id, data$dtu_cell_type)
+```
+
+```{r}
+# Calculate the similarity matrix using the KNN graph
+knn_mat <- knn_simMat(
+  data@graphs$RNA_snn,  # Use Seurat's SNN graph
+  data$dtu_cell_type    # Specify the cell types
+)
+```
+
+```{r}
+# Create the design matrix
+design_mat <- data.frame(
+  condition = ifelse(grepl("control", rownames(count_mat)), "healthy", "disease")
+)
+
+rownames(design_mat) <- rownames(count_mat)
+```
+
+```{r}
+# Perform DCATS analysis
+dcats_results <- dcats_GLM(
+  count_mat = count_mat,
+  design_mat = design_mat,
+  similarity_mat = knn_mat
+)
+```
+
+```{r}
+# Extract and inspect results
+# dcats_results$fdr
+```
+
+```{r}
+# rowSums(count_mat)  # Summarize counts for each cell type
+# colSums(count_mat)  # Summarize counts for each condition
+# table(design_mat$condition)
+
+```
+
+```{r}
+# Visualize the FDR results (Optional)
+fdr_df <- as.data.frame(dcats_results$fdr)
+fdr_df$cell_type <- rownames(fdr_df)
+ggplot(fdr_df, aes(x = reorder(cell_type, condition), y = condition)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "DCATS FDR Results", x = "Cell Type", y = "FDR")
+```
+
