@@ -28,6 +28,7 @@ sce <- scDblFinder(sce,
 
 plotUMAP(sce,
          colour_by = "scDblFinder.score")
+ggsave("../results/02/umap_coloured_by_dbl_score.png")
 
 table(sce$scDblFinder.class)
 
@@ -35,6 +36,7 @@ plotColData(sce,
             x = "RNA_snn_res.0.7",
             y = "scDblFinder.score",
             colour_by = ("scDblFinder.class"))
+ggsave("../results/02/scatter_dbl_detection_pr_cluster.png")
 ```
 
 # Subset to not include doublets

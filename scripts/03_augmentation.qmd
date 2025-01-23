@@ -117,19 +117,20 @@ for (i in seq_along(reductions)) {
 }
 ```
 
-Visualize UMAP
+Visualize UMAP comparing before and after integration
 ```{r}
 p1 <- DimPlot(data,
               reduction = 'UMAP',
               group.by = 'donor_id') +
-  ggtitle("UMAP data")
+  ggtitle("Pre-integration UMAP")
 p2 <- DimPlot(data,
               reduction = "umap_harmony",
               group.by = "donor_id") +
-  ggtitle("UMAP Harmony")
+  ggtitle("Post-integration UMAP")
 
 wrap_plots(p1, p2, nrow = 1) +
   plot_layout(guides = "collect")
+ggsave("../results/03/umap_donor_id.png")
 ```
 
 ```{r}
@@ -138,16 +139,17 @@ p1 <- DimPlot(data,
               group.by = 'cell_type',
               label = TRUE) +
   NoLegend() +
-  ggtitle("UMAP data")
+  ggtitle("Pre-integration UMAP")
 p3 <- DimPlot(data,
               reduction = "umap_harmony",
               group.by = "cell_type",
               label = TRUE) +
   NoLegend() +
-  ggtitle("UMAP Harmony")
+  ggtitle("Post-integration UMAP")
 
 wrap_plots(p1, p3, nrow = 1) +
   plot_layout(guides = "collect")
+ggsave("../results/03/umap_cell_type.png")
 ```
 
 See Tileplots again
@@ -174,6 +176,7 @@ ggplot(contingency_table, aes(x = Cluster,
        y = "Donor ID",
        fill = "Count") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+ggsave(filename = "../results/03/tileplot_donor_post.png")
 ```
 
 ```{r}
@@ -200,6 +203,7 @@ ggplot(contingency_table, aes(x = Cluster,
        y = "Donor ID",
        fill = "Count") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+ggsave(filename = "../results/03/tileplot_cluster_post.png")
 ```
 
 
@@ -213,6 +217,7 @@ for (view in views) {
                reduction = "umap_harmony",
                group.by = view)
   print(p)
+  ggsave(glue::glue("../results/03/umap_{view}.png"))
 } 
 ```
 
