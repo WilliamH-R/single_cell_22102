@@ -51,10 +51,11 @@ knn_mat <- knn_simMat(
 ```{r}
 # Create the design matrix
 design_mat <- data.frame(
-  condition = ifelse(grepl("control", rownames(count_mat)), "healthy", "disease")
+  condition = ifelse(grepl("control", rownames(count_mat)), "ahealthy", "disease")
 )
 
 rownames(design_mat) <- rownames(count_mat)
+design_mat
 ```
 
 ```{r}
@@ -64,11 +65,12 @@ dcats_results <- dcats_GLM(
   design_mat = design_mat,
   similarity_mat = knn_mat
 )
+dcats_results
 ```
 
 ```{r}
 # Extract and inspect results
-# dcats_results$fdr
+dcats_results$fdr
 ```
 
 ```{r}
@@ -103,7 +105,9 @@ p1 <- ggplot(df,
        x = "Cell Type",
        y = "Estimated coefficient",
        fill = "")+
-  coord_flip()
+  coord_flip()+
+  scale_fill_viridis_d() +
+  theme_bw()
   
 p1
 
@@ -112,7 +116,10 @@ output_dir <- "../results/06"
 ggsave(
   filename = file.path(output_dir, "dcats.png"),
   plot = p1,
-  width = 8, height = 6
+  width = 8, 
+  height = 6,
+  dpi = 300,
+  scale = 1
 )
 ```
 
