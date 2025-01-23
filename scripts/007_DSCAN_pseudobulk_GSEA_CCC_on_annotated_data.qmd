@@ -1,5 +1,5 @@
 ---
-title: "Pseudobulk analysis Morten take"
+title: "Pseudobulk analysis retake"
 format: html
 editor: source
 ---
@@ -46,7 +46,6 @@ pbmc.MTB$case_control_id <- paste0(pbmc.MTB$case_control, pbmc.MTB$donor_id)
 
 ```{r}
 count_mat = table(pbmc.MTB$case_control_id, pbmc.MTB$dtu_cell_type)
-count_mat
 ```
 
 ```{r}
@@ -55,9 +54,6 @@ knn_mat <- knn_simMat(
   pbmc.MTB@graphs$RNA_snn,  # Use Seurat's SNN graph
   pbmc.MTB$dtu_cell_type    # Specify the cell types
 )
-
-dim(knn_mat)
-knn_mat
 ```
 
 ```{r}
@@ -67,7 +63,6 @@ design_mat <- data.frame(
 )
 
 rownames(design_mat) <- rownames(count_mat)
-design_mat
 ```
 
 ```{r}
@@ -80,9 +75,8 @@ dcats_results <- dcats_GLM(
 ```
 
 ```{r}
-
 # Extract and inspect results
-dcats_results$fdr
+# dcats_results$fdr
 ```
 
 ```{r}
@@ -100,7 +94,6 @@ ggplot(fdr_df, aes(x = reorder(cell_type, condition), y = condition)) +
   geom_bar(stat = "identity") +
   coord_flip() +
   labs(title = "DCATS FDR Results", x = "Cell Type", y = "FDR")
-
 ```
 
 # Differential Expression Analysis
@@ -139,7 +132,8 @@ cts.split.modified <- lapply(cts.split, function(x){
 ### Subset the Count Matrix for a Specific Cell Type
 
 ```{r}
-counts_monocytes <- cts.split.modified$`Classical monocytes`
+cell_group <- `Classical monocytes` #Non-classical monocytes, CD8+T cells
+counts_monocytes <- cts.split.modified$cell_group
 ```
 
 ```{r}
@@ -156,6 +150,7 @@ colData$condition <- factor(colData$condition, levels = c("control", "case"))
 ### Run DESeq2
 
 ```{r}
+#| warnings: false
 # Create DESeq2 object   
 dds <- DESeqDataSetFromMatrix(countData = counts_monocytes,
                               colData = colData,
@@ -200,13 +195,14 @@ ggplot(data = pca_data,
 ```
 
 ```{r}
+#| output: false
 dds <- DESeq(dds)
 ```
 
 Checking the contrasts
 
 ```{r}
-resultsNames(dds)
+# resultsNames(dds)
 ```
 
 ```{r}
@@ -215,7 +211,7 @@ res <- results(dds,
                name = "condition_case_vs_control",
                alpha = 0.05)
 
-summary(res)
+# summary(res)
 ```
 
 ```{r}
@@ -226,17 +222,17 @@ res_tbl <- res %>%
   as_tibble() %>%
   arrange(padj)
 
-res_tbl
+# res_tbl
 
 # Check results output
-res_tbl |>
-  arrange(desc(abs(log2FoldChange)))
+# res_tbl |>
+#   arrange(desc(abs(log2FoldChange)))
 ```
 
 Manually we find that TRBV8 gene has the highest log2FC meaning that this gene should be upregulated by cases (CHIP). We check this with the `plotCounts` function.
 
 ```{r}
-plotCounts(dds = dds, gene = "TRBV28")
+# plotCounts(dds = dds, gene = "TRBV28")
 ```
 
 And find that cases (CHIP) have higher expression of TRBV28. This doesn't make any sense, as TRBV28 is a part of the T-cell receptor and we have made a pseudobulk analysis of monocytes, which should not express TRBV28. We find that only CHIP patients have expression.
@@ -276,7 +272,7 @@ sig_res <- dplyr::filter(res_tbl, padj < padj_cutoff) %>%
   dplyr::arrange(padj)
 
 # Check significant genes output
-sig_res
+# sig_res
 ```
 
 ```{r}
@@ -323,6 +319,7 @@ msigdb_list <- msigdb |>
 ```
 
 ```{r}
+#| output: false
 # Add EntrezID for the genes
 Entrez <- AnnotationDbi::select(org.Hs.eg.db,
                                 key = res_gsea$genes, 
@@ -356,10 +353,10 @@ fgseaRes <- fgsea(pathways = msigdb_list,
                   # nperm = 1000  # Adjust nperm as needed
 )
 # View top results
-head(fgseaRes)
+# head(fgseaRes)
 
 ```
-
+#### start: Old database
 ```{r}
 # Entrez <- AnnotationDbi::select(org.Hs.eg.db,
 #                                 key = res$genes, 
@@ -386,6 +383,8 @@ head(fgseaRes)
 # names(rankData) <- res$genes
 # head(rankData)
 ```
+
+### end Old database
 
 ```{r}
 # #Running fgsea algorithm:
@@ -423,118 +422,3 @@ ggplot(top_bottom_10, aes(reorder(pathway, NES), NES)) +
        title="Top 10 and Bottom 10\nHallmark pathways based\non Absolute NES\nfrom GSEA") + 
   theme_minimal()
 ```
-
-# Cell-cell communication
-
-```{r}
-suppressPackageStartupMessages({
-library(CellChat)
-library(patchwork)
-library(future)
-})
-options(stringsAsFactors = FALSE)
-```
-
-```{r}
-#Create a CellChat object
-cellchat <- createCellChat(object = pbmc.MTB,
-                           meta = pbmc.MTB@meta.data,
-                           group.by = "dtu_cell_type")
-```
-
-```{r}
-#Set interaction-ligand database
-CellChatDB <- CellChatDB.human 
-showDatabaseCategory(CellChatDB)
-```
-
-```{r}
-# Show the structure of the database
-dplyr::glimpse(CellChatDB$interaction)
-```
-
-```{r}
-# use a subset of CellChatDB for cell-cell communication analysis
-CellChatDB.use <- subsetDB(CellChatDB, search = "Secreted Signaling") # use Secreted Signaling
-#use all CellChatDB for cell-cell communication analysis
-#CellChatDB.use <- CellChatDB # simply use the default CellChatDB
-
-# set the used database in the object
-cellchat@DB <- CellChatDB.use
-```
-
-```{r}
-# subset the expression data of signaling genes for saving computation cost
-cellchat <- subsetData(cellchat) # This step is necessary if using the whole database
-future::plan("multisession", workers = 4) # do parallel
-cellchat <- identifyOverExpressedGenes(cellchat)
-cellchat <- identifyOverExpressedInteractions(cellchat)
-```
-
-```{r}
-cellchat <- computeCommunProb(cellchat)
-# Filter out the cell-cell communication if there are only few number of cells in certain cell groups
-cellchat <- filterCommunication(cellchat, min.cells = 10)
-
-#Extract the inferred cellular communication network as a data frame
-df.net <- subsetCommunication(cellchat) #returns a data frame consisting of all the inferred cell-cell communications at the level of ligands/receptors. 
-
-#Infer the cell-cell communication at a signaling pathway level
-cellchat <- computeCommunProbPathway(cellchat)
-```
-
-```{r}
-#Calculate the aggregated cell-cell communication network
-cellchat <- aggregateNet(cellchat)
-groupSize <- as.numeric(table(cellchat@idents))
-par(mfrow = c(1,2), xpd=TRUE)
-netVisual_circle(cellchat@net$count, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Number of interactions")
-netVisual_circle(cellchat@net$weight, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Interaction weights/strength")
-```
-
-```{r}
-pathways <- cellchat@netP$pathways
-
-pathways.show <- c("TNF") 
-
-# Circle plot
-par(mfrow=c(1,1))
-netVisual_aggregate(cellchat, signaling = pathways.show, layout = "circle")
-```
-
-```{r}
-# Heatmap
-par(mfrow=c(1,1))
-netVisual_heatmap(cellchat, signaling = pathways.show, color.heatmap = "Reds")
-```
-```{r}
-saveRDS(cellchat, file = "../data/cell_chat_monocyte.rds")
-
-```
-```{r}
-# Initialize an empty list to store plots
-plot_list <- list()
-
-# Loop over each pathway and generate plots
-for (pathway in pathways) {
-  # Circle plot
-  circle_plot <- netVisual_aggregate(cellchat, 
-                                     signaling = pathway, 
-                                     layout = "circle") +
-    ggtitle("pathway")
-
-  #heatmap
-  par(mfrow=c(1,1))
-  heat_plot <- netVisual_heatmap(cellchat, signaling = pathway, color.heatmap = "Reds")
-
-  # Save the plots in the list
-  plot_list[[paste0(pathway, "_circle")]] <- circle_plot
-  plot_list[[paste0(pathway, "_heat")]] <- heat_plot
-
-}
-
-# Combine all plots into a patchwork layout
-plot_list
-
-```
-
