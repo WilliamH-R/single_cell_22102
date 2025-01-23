@@ -19,6 +19,46 @@ raw_data <- readRDS("../raw_data/raw_data.rds")
 
 raw_data[["all"]] <- "all_genes"
 ```
+```{r}
+if (!dir.exists("../results/")) {
+  dir.create("../results/")
+}
+
+
+if (!dir.exists("../results/01/")) {
+  dir.create("../results/01/")
+}
+
+
+if (!dir.exists("../results/02/")) {
+  dir.create("../results/02/")
+}
+
+
+if (!dir.exists("../results/03/")) {
+  dir.create("../results/03/")
+}
+
+
+if (!dir.exists("../results/04/")) {
+  dir.create("../results/04/")
+}
+
+
+if (!dir.exists("../results/05/")) {
+  dir.create("../results/05/")
+}
+
+
+if (!dir.exists("../results/06/")) {
+  dir.create("../results/06/")
+}
+
+
+if (!dir.exists("../results/07/")) {
+  dir.create("../results/07/")
+}
+```
 
 # Tibble to keep track of how many cells are removed at each step
 ```{r}

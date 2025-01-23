@@ -1,7 +1,7 @@
 ---
 title: "Pseudobulk analysis Morten take"
 format: html
-editor: visual
+editor: source
 ---
 
 ```{r}
@@ -137,6 +137,7 @@ cts.split.modified <- lapply(cts.split, function(x){
 ```
 
 ### Subset the Count Matrix for a Specific Cell Type
+
 ```{r}
 counts_monocytes <- cts.split.modified$`Classical monocytes`
 ```
@@ -153,6 +154,7 @@ colData$condition <- factor(colData$condition, levels = c("control", "case"))
 ```
 
 ### Run DESeq2
+
 ```{r}
 # Create DESeq2 object   
 dds <- DESeqDataSetFromMatrix(countData = counts_monocytes,
@@ -161,13 +163,16 @@ dds <- DESeqDataSetFromMatrix(countData = counts_monocytes,
 ```
 
 ### Filter
+
 Remove rows (genes) that have fewer than 10 reads from dds.
+
 ```{r}
 keep <- rowSums(counts(dds)) >= 10
 dds <- dds[keep,]
 ```
 
 Looking at the PCA from the vst transformed data
+
 ```{r}
 vst <- vst(dds,
            blind = TRUE)
@@ -289,49 +294,103 @@ top20_sig_genes <- sig_res %>%
 ```
 
 # fGSEA
+
 ```{r}
-library(msigdb)
+library(msigdbr)
 ```
 
 ```{r}
-gsList <- readRDS("../data/gene_sets.Rds")
-res$genes <- rownames(res)
+gsList <- readRDS("/home/projects/22102_single_cell/day5/gene_sets.Rds")
+res_gsea <- res
+res_gsea$genes <- rownames(res_gsea)
 
 #Add EntrezID for the genes
 library(org.Hs.eg.db)
 ```
 
 ```{r}
-Entrez <- AnnotationDbi::select(org.Hs.eg.db,
-                                key = res$genes, 
-                                columns = "ENTREZID",
-                                keytype = "SYMBOL")
+# Retrieve MSigDB gene sets
+msigdb <- msigdbr(species = "Homo sapiens", category = "H")
+
+# Convert the MSigDB data frame into a list of pathways sets
+msigdb_list <- msigdb |> 
+  group_by(gs_name) |> 
+  summarise(gene_list = list(gene_symbol),
+            .groups = "drop") |> 
+  with(setNames(lapply(gene_list, unlist), gs_name))
+
+  
 ```
 
 ```{r}
+# Add EntrezID for the genes
+Entrez <- AnnotationDbi::select(org.Hs.eg.db,
+                                key = res_gsea$genes, 
+                                columns = "ENTREZID",
+                                keytype = "SYMBOL")
+
+# Convert to tibble and merge with results
 Entrez <- as_tibble(Entrez)
-res <- as.data.frame(res)
-res <- inner_join(res,
+res_gsea <- as.data.frame(res_gsea)
+res_gsea <- inner_join(res_gsea,
                   Entrez,
                   by = c("genes" = "SYMBOL"))
 
-#Remove those genes that do not have an entrezid
-res <- filter(res, !is.na(ENTREZID))
-# gene_list  <- gene_list[!is.na(names(gene_list))]
+# Remove genes without Entrez IDs
+res_gsea <- filter(res_gsea, !is.na(ENTREZID))
+
+# Create new metric
+res_gsea$stat_sig <- -log10(res_gsea$pvalue) * sign(res_gsea$log2FoldChange)
+
+# Prepare rank data
+rankData <- res_gsea$stat_sig
+names(rankData) <- res_gsea$genes  # Use gene symbols for ranking
+rankData <- na.omit(rankData)  # Remove NAs
+
 ```
 
 ```{r}
-#Create new metric
-res$stat_sig <- -log10(res$pvalue) * sign(res$log2FoldChange)
-rankData <- res$stat_sig
-names(rankData) <- res$genes
-head(rankData)
+# Run fgsea
+fgseaRes <- fgsea(pathways = msigdb_list,
+                  stats = rankData,
+                  # nperm = 1000  # Adjust nperm as needed
+)
+# View top results
+head(fgseaRes)
+
 ```
 
 ```{r}
-#Running fgsea algorithm:
-fgseaRes <- fgsea(pathways = gsList,
-                  stats = na.omit(rankData))
+# Entrez <- AnnotationDbi::select(org.Hs.eg.db,
+#                                 key = res$genes, 
+#                                 columns = "ENTREZID",
+#                                 keytype = "SYMBOL")
+```
+
+```{r}
+# Entrez <- as_tibble(Entrez)
+# res <- as.data.frame(res)
+# res <- inner_join(res,
+#                   Entrez,
+#                   by = c("genes" = "SYMBOL"))
+# 
+# #Remove those genes that do not have an entrezid
+# res <- filter(res, !is.na(ENTREZID))
+# # gene_list  <- gene_list[!is.na(names(gene_list))]
+```
+
+```{r}
+# #Create new metric
+# res$stat_sig <- -log10(res$pvalue) * sign(res$log2FoldChange)
+# rankData <- res$stat_sig
+# names(rankData) <- res$genes
+# head(rankData)
+```
+
+```{r}
+# #Running fgsea algorithm:
+# fgseaRes <- fgsea(pathways = gsList,
+#                   stats = na.omit(rankData))
 
 #Tidy the results
 fgseaResTidy <- fgseaRes %>%
@@ -340,7 +399,7 @@ fgseaResTidy <- fgseaRes %>%
 ```
 
 ```{r}
-fgseaResTidy
+fgseaResTidy |> arrange(NES)
 ```
 
 ```{r}
@@ -448,3 +507,34 @@ netVisual_aggregate(cellchat, signaling = pathways.show, layout = "circle")
 par(mfrow=c(1,1))
 netVisual_heatmap(cellchat, signaling = pathways.show, color.heatmap = "Reds")
 ```
+```{r}
+saveRDS(cellchat, file = "../data/cell_chat_monocyte.rds")
+
+```
+```{r}
+# Initialize an empty list to store plots
+plot_list <- list()
+
+# Loop over each pathway and generate plots
+for (pathway in pathways) {
+  # Circle plot
+  circle_plot <- netVisual_aggregate(cellchat, 
+                                     signaling = pathway, 
+                                     layout = "circle") +
+    ggtitle("pathway")
+
+  #heatmap
+  par(mfrow=c(1,1))
+  heat_plot <- netVisual_heatmap(cellchat, signaling = pathway, color.heatmap = "Reds")
+
+  # Save the plots in the list
+  plot_list[[paste0(pathway, "_circle")]] <- circle_plot
+  plot_list[[paste0(pathway, "_heat")]] <- heat_plot
+
+}
+
+# Combine all plots into a patchwork layout
+plot_list
+
+```
+
