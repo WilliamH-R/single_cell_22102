@@ -10,7 +10,6 @@ library(DCATS)
 library(Seurat)
 library(SeuratData)
 library(SingleCellExperiment)
-#library(clusterProfiler)
 library(dplyr)
 library(enrichplot)
 library(fgsea)
@@ -18,82 +17,33 @@ library(ggplot2)
 library(ggrepel)
 library(tibble)
 library(tidyverse)
+library(DESeq2)
 })
 ```
 
+# load data
 ```{r}
-pbmc.MTB <- readRDS("../data/annotated_data.rds")
+data <- readRDS("../data/annotated_data.rds")
 ```
 
+# add case control ids
 ```{r}
-pbmc.MTB[["case_control"]] <- pbmc.MTB@meta.data$CHIP
+data[["case_control"]] <- data@meta.data$CHIP
 ```
 
 ```{r}
 # Convert case_control to a character vector to allow modifications
-pbmc.MTB$case_control <- as.character(pbmc.MTB$case_control)
+data$case_control <- as.character(data$case_control)
 
 # Modify the case_control levels
-pbmc.MTB$case_control[pbmc.MTB$case_control == "control"] <- "control"
-pbmc.MTB$case_control[pbmc.MTB$case_control == "chip"] <- "case"
-# View(pbmc.MTB)
+data$case_control[data$case_control == "control"] <- "control"
+data$case_control[data$case_control == "chip"] <- "case"
+# View(data)
 # Optionally, convert CHIP back to a factor
-pbmc.MTB$case_control <- factor(pbmc.MTB$case_control, levels = c("control", "case"))
+data$case_control <- factor(data$case_control, levels = c("control", "case"))
 
 # Add id to condition
-pbmc.MTB$case_control_id <- paste0(pbmc.MTB$case_control, pbmc.MTB$donor_id)
-```
-
-```{r}
-count_mat = table(pbmc.MTB$case_control_id, pbmc.MTB$dtu_cell_type)
-```
-
-```{r}
-# Calculate the similarity matrix using the KNN graph
-knn_mat <- knn_simMat(
-  pbmc.MTB@graphs$RNA_snn,  # Use Seurat's SNN graph
-  pbmc.MTB$dtu_cell_type    # Specify the cell types
-)
-```
-
-```{r}
-# Create the design matrix
-design_mat <- data.frame(
-  condition = ifelse(grepl("control", rownames(count_mat)), "healthy", "disease")
-)
-
-rownames(design_mat) <- rownames(count_mat)
-```
-
-```{r}
-# Perform DCATS analysis
-dcats_results <- dcats_GLM(
-  count_mat = count_mat,
-  design_mat = design_mat,
-  similarity_mat = knn_mat
-)
-```
-
-```{r}
-# Extract and inspect results
-# dcats_results$fdr
-```
-
-```{r}
-# rowSums(count_mat)  # Summarize counts for each cell type
-# colSums(count_mat)  # Summarize counts for each condition
-# table(design_mat$condition)
-
-```
-
-```{r}
-# Visualize the FDR results (Optional)
-fdr_df <- as.data.frame(dcats_results$fdr)
-fdr_df$cell_type <- rownames(fdr_df)
-ggplot(fdr_df, aes(x = reorder(cell_type, condition), y = condition)) +
-  geom_bar(stat = "identity") +
-  coord_flip() +
-  labs(title = "DCATS FDR Results", x = "Cell Type", y = "FDR")
+data$case_control_id <- paste0(data$case_control, data$donor_id)
 ```
 
 # Differential Expression Analysis
@@ -101,10 +51,9 @@ ggplot(fdr_df, aes(x = reorder(cell_type, condition), y = condition)) +
 Focus on significant cell types identified by DCATS for pseudo-bulk differential expression.
 
 ```{r}
-library(DESeq2)
 
 # Aggregate counts to sample level
-counts <- AggregateExpression(pbmc.MTB, 
+counts <- AggregateExpression(data, 
                               group.by = c("dtu_cell_type", "case_control_id"),
                               assays =  "RNA",
                               return.seurat = FALSE)
@@ -131,9 +80,8 @@ cts.split.modified <- lapply(cts.split, function(x){
 
 ### Subset the Count Matrix for a Specific Cell Type
 
-```{r}
-cell_group <- `Classical monocytes` #Non-classical monocytes, CD8+T cells
-counts_monocytes <- cts.split.modified$cell_group
+```{r} 
+counts_monocytes <- cts.split.modified$`Classical monocytes` #Classical monocytes, Non-classical monocytes, CD8+T cells
 ```
 
 ```{r}
@@ -151,6 +99,7 @@ colData$condition <- factor(colData$condition, levels = c("control", "case"))
 
 ```{r}
 #| warnings: false
+#| output: false
 # Create DESeq2 object   
 dds <- DESeqDataSetFromMatrix(countData = counts_monocytes,
                               colData = colData,
@@ -347,6 +296,8 @@ rankData <- na.omit(rankData)  # Remove NAs
 ```
 
 ```{r}
+#| warning: false
+#| output: false
 # Run fgsea
 fgseaRes <- fgsea(pathways = msigdb_list,
                   stats = rankData,
